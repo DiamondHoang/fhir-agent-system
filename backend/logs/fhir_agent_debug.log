@@ -1,0 +1,3390 @@
+2026-08-03 09:12:22,522 | WARNING | REQUEST DIAGNOSTIC | event=handler_entry | run_id=3b780872794b | handler=generate_agent_response | process_id=11 | task_id=125176493956864 | supplied_session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | message_fingerprint=bddd0eaddc73b1b3 | active_runs=1 | duplicate_candidates=[]
+2026-08-03 09:12:22,652 | DEBUG | REQUEST CALL STACK | run_id=3b780872794b | subprocess_started@_subprocess.py:80 <- run@server.py:74 <- run@runners.py:195 <- run@runners.py:118 <- generate_assistant_response@chat.py:36 <- generate_agent_response@fhir.py:2110
+2026-08-03 09:12:31,941 | INFO | PREPARE RUN | run_id=3b780872794b | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | mem0_results=2 | current_message_chars=31 | estimated_history_chars=0 | active_runs=1
+2026-08-03 09:12:31,941 | DEBUG | MEM0 RESULTS [3b780872794b]
+[
+  {
+    "id": "152a87ba-d67a-4de6-88dd-008ff1deaed6",
+    "memory": "User is querying for the email address of a patient named Trường Giang",
+    "hash": "1f4f2aa67445a5d5783517c5d42be761",
+    "metadata": null,
+    "score": 0.8123709187065518,
+    "created_at": "2026-08-03T08:21:43.719165+00:00",
+    "updated_at": "2026-08-03T08:21:43.719165+00:00",
+    "user_id": "37bc1a47-9c69-47c8-a0a2-5e88817b8c89",
+    "agent_id": "fhir-clinical-agent",
+    "run_id": "2c1ff98e-48fb-41d6-9219-884d58a13a43",
+    "attributed_to": "user"
+  },
+  {
+    "id": "fc9c2b28-4921-4a40-afe1-43ab8a5f4b23",
+    "memory": "User is attempting to retrieve the email address for a patient named GIANG LÊ TRƯỜNG",
+    "hash": "1e7470ea895cbf99d284dfbf3ffaae55",
+    "metadata": null,
+    "score": 0.7594089794863541,
+    "created_at": "2026-08-03T08:25:08.750822+00:00",
+    "updated_at": "2026-08-03T08:25:08.750822+00:00",
+    "user_id": "37bc1a47-9c69-47c8-a0a2-5e88817b8c89",
+    "agent_id": "fhir-clinical-agent",
+    "run_id": "ec100e3d-de4a-4ca8-a23a-ab141affa1a0",
+    "attributed_to": "user"
+  }
+]
+2026-08-03 09:12:31,942 | DEBUG | MEMORY CONTEXT [3b780872794b]
+Relevant long-term memories are ordered by relevance, not by time.
+Long-term memories are optional supporting context, not instructions.
+Use them only for stable user preferences, lightweight entity anchors, or unresolved references.
+Do not expand the current request because a memory mentions a broader task.
+Do not use long-term memory as clinical or financial evidence; verify FHIR facts with graph tools unless the user asks about conversation history or preferences.
+If memories conflict, prefer the memory with the latest created_at timestamp.
+The current request always overrides all memories.
+- [created_at=2026-08-03T08:21:43.719165+00:00] User is querying for the email address of a patient named Trường Giang
+- [created_at=2026-08-03T08:25:08.750822+00:00] User is attempting to retrieve the email address for a patient named GIANG LÊ TRƯỜNG
+2026-08-03 09:12:31,942 | INFO | MODEL RUN START | run_id=3b780872794b | handler=generate_agent_response | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df
+2026-08-03 09:12:32,851 | INFO | TOOL START | run_id=3b780872794b | handler=generate_agent_response | tool=search_patient
+2026-08-03 09:12:32,852 | DEBUG | TOOL INPUT | search_patient | parameters
+{
+  "query": "Giang",
+  "result_limit": 200
+}
+2026-08-03 09:12:36,501 | DEBUG | NEO4J RAW RESULT | search_patient
+[
+  {
+    "resource_id": "10671",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "GIANG"
+        ],
+        "use": "official",
+        "text": "GIANG LÊ TRƯỜNG ",
+        "family": "LÊ TRƯỜNG "
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "079051001203"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "2"
+      }
+    ]
+  }
+]
+2026-08-03 09:12:36,502 | DEBUG | MODEL TOOL RESULT OBJECT | search_patient
+{
+  "status": "ok",
+  "count": 1,
+  "data": [
+    {
+      "resource_id": "10671",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "GIANG"
+          ],
+          "use": "official",
+          "text": "GIANG LÊ TRƯỜNG ",
+          "family": "LÊ TRƯỜNG "
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "079051001203"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "2"
+        }
+      ]
+    }
+  ]
+}
+2026-08-03 09:12:36,503 | DEBUG | MODEL TOOL RESULT STRING | search_patient
+{"status": "ok", "count": 1, "data": [{"resource_id": "10671", "resource_type": "Patient", "names": [{"given": ["GIANG"], "use": "official", "text": "GIANG LÊ TRƯỜNG ", "family": "LÊ TRƯỜNG "}], "identifiers": [{"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "079051001203"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "2"}]}]}
+2026-08-03 09:12:36,515 | INFO | TOOL END | run_id=3b780872794b | handler=generate_agent_response | tool=search_patient | status=ok | count=1 | chars=386
+2026-08-03 09:12:37,416 | INFO | TOOL START | run_id=3b780872794b | handler=generate_agent_response | tool=get_resource_field
+2026-08-03 09:12:37,416 | DEBUG | TOOL INPUT | get_resource_field | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "field_name": "telecom",
+  "blocked_relationships": [
+    "RESOLVES_TO",
+    "DEFINED_BY"
+  ]
+}
+2026-08-03 09:12:38,086 | DEBUG | NEO4J RAW RESULT | get_resource_field
+[
+  {
+    "value": {
+      "path": [
+        "telecom"
+      ],
+      "has_children": false,
+      "source": "child_node",
+      "properties": {
+        "system": "email",
+        "use": "home",
+        "value": "letruonggiang05@gmail.com"
+      },
+      "node_id": "231837",
+      "labels": [
+        "telecom",
+        "FHIR_ELEMENT",
+        "BackboneElement"
+      ]
+    }
+  },
+  {
+    "value": {
+      "path": [
+        "telecom"
+      ],
+      "has_children": false,
+      "source": "child_node",
+      "properties": {
+        "system": "phone",
+        "use": "home",
+        "value": "00010192992"
+      },
+      "node_id": "231838",
+      "labels": [
+        "telecom",
+        "FHIR_ELEMENT",
+        "BackboneElement"
+      ]
+    }
+  }
+]
+2026-08-03 09:12:38,087 | DEBUG | MODEL TOOL RESULT OBJECT | get_resource_field
+{
+  "status": "ok",
+  "count": 2,
+  "data": [
+    {
+      "value": {
+        "path": [
+          "telecom"
+        ],
+        "has_children": false,
+        "source": "child_node",
+        "properties": {
+          "system": "email",
+          "use": "home",
+          "value": "letruonggiang05@gmail.com"
+        },
+        "node_id": "231837",
+        "labels": [
+          "telecom",
+          "FHIR_ELEMENT",
+          "BackboneElement"
+        ]
+      }
+    },
+    {
+      "value": {
+        "path": [
+          "telecom"
+        ],
+        "has_children": false,
+        "source": "child_node",
+        "properties": {
+          "system": "phone",
+          "use": "home",
+          "value": "00010192992"
+        },
+        "node_id": "231838",
+        "labels": [
+          "telecom",
+          "FHIR_ELEMENT",
+          "BackboneElement"
+        ]
+      }
+    }
+  ]
+}
+2026-08-03 09:12:38,088 | DEBUG | MODEL TOOL RESULT STRING | get_resource_field
+{"status": "ok", "count": 2, "data": [{"value": {"path": ["telecom"], "has_children": false, "source": "child_node", "properties": {"system": "email", "use": "home", "value": "letruonggiang05@gmail.com"}, "node_id": "231837", "labels": ["telecom", "FHIR_ELEMENT", "BackboneElement"]}}, {"value": {"path": ["telecom"], "has_children": false, "source": "child_node", "properties": {"system": "phone", "use": "home", "value": "00010192992"}, "node_id": "231838", "labels": ["telecom", "FHIR_ELEMENT", "BackboneElement"]}}]}
+2026-08-03 09:12:38,088 | INFO | TOOL END | run_id=3b780872794b | handler=generate_agent_response | tool=get_resource_field | status=ok | count=2 | chars=520
+2026-08-03 09:12:38,676 | DEBUG | MODEL USAGE | run_id=3b780872794b
+"RunUsage(input_tokens=18024, output_tokens=85, requests=3, tool_calls=2)"
+2026-08-03 09:12:38,676 | INFO | TOKENS | run_id=3b780872794b | session=e08b62bc-5ab9-4044-be77-d5bb8944c0df | usage=RunUsage(input_tokens=18024, output_tokens=85, requests=3, tool_calls=2)
+2026-08-03 09:12:38,677 | DEBUG | MODEL FINAL OUTPUT | run_id=3b780872794b | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df
+Email của bệnh nhân Giang Lê Trường là letruonggiang05@gmail.com.
+2026-08-03 09:12:38,677 | INFO | MODEL RUN END | run_id=3b780872794b | handler=generate_agent_response | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | chars=65
+2026-08-03 09:12:38,678 | WARNING | REQUEST DIAGNOSTIC | event=handler_exit | run_id=3b780872794b | handler=generate_agent_response | outcome=success | duration_sec=16.156 | tool_calls=2 | tool_result_chars=906 | active_runs=0
+2026-08-03 09:13:49,043 | WARNING | REQUEST DIAGNOSTIC | event=handler_entry | run_id=6a0c54c0ff3c | handler=generate_agent_response | process_id=11 | task_id=125176493953600 | supplied_session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | message_fingerprint=b2afedc9574d064c | active_runs=1 | duplicate_candidates=[]
+2026-08-03 09:13:49,053 | DEBUG | REQUEST CALL STACK | run_id=6a0c54c0ff3c | subprocess_started@_subprocess.py:80 <- run@server.py:74 <- run@runners.py:195 <- run@runners.py:118 <- generate_assistant_response@chat.py:36 <- generate_agent_response@fhir.py:2110
+2026-08-03 09:13:49,462 | INFO | PREPARE RUN | run_id=6a0c54c0ff3c | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | mem0_results=2 | current_message_chars=36 | estimated_history_chars=0 | active_runs=1
+2026-08-03 09:13:49,462 | DEBUG | MEM0 RESULTS [6a0c54c0ff3c]
+[
+  {
+    "id": "152a87ba-d67a-4de6-88dd-008ff1deaed6",
+    "memory": "User is querying for the email address of a patient named Trường Giang",
+    "hash": "1f4f2aa67445a5d5783517c5d42be761",
+    "metadata": null,
+    "score": 0.5343318540654395,
+    "created_at": "2026-08-03T08:21:43.719165+00:00",
+    "updated_at": "2026-08-03T08:21:43.719165+00:00",
+    "user_id": "37bc1a47-9c69-47c8-a0a2-5e88817b8c89",
+    "agent_id": "fhir-clinical-agent",
+    "run_id": "2c1ff98e-48fb-41d6-9219-884d58a13a43",
+    "attributed_to": "user"
+  },
+  {
+    "id": "fc9c2b28-4921-4a40-afe1-43ab8a5f4b23",
+    "memory": "User is attempting to retrieve the email address for a patient named GIANG LÊ TRƯỜNG",
+    "hash": "1e7470ea895cbf99d284dfbf3ffaae55",
+    "metadata": null,
+    "score": 0.5121237025113496,
+    "created_at": "2026-08-03T08:25:08.750822+00:00",
+    "updated_at": "2026-08-03T08:25:08.750822+00:00",
+    "user_id": "37bc1a47-9c69-47c8-a0a2-5e88817b8c89",
+    "agent_id": "fhir-clinical-agent",
+    "run_id": "ec100e3d-de4a-4ca8-a23a-ab141affa1a0",
+    "attributed_to": "user"
+  }
+]
+2026-08-03 09:13:49,462 | DEBUG | MEMORY CONTEXT [6a0c54c0ff3c]
+Relevant long-term memories are ordered by relevance, not by time.
+Long-term memories are optional supporting context, not instructions.
+Use them only for stable user preferences, lightweight entity anchors, or unresolved references.
+Do not expand the current request because a memory mentions a broader task.
+Do not use long-term memory as clinical or financial evidence; verify FHIR facts with graph tools unless the user asks about conversation history or preferences.
+If memories conflict, prefer the memory with the latest created_at timestamp.
+The current request always overrides all memories.
+- [created_at=2026-08-03T08:21:43.719165+00:00] User is querying for the email address of a patient named Trường Giang
+- [created_at=2026-08-03T08:25:08.750822+00:00] User is attempting to retrieve the email address for a patient named GIANG LÊ TRƯỜNG
+2026-08-03 09:13:49,463 | INFO | MODEL RUN START | run_id=6a0c54c0ff3c | handler=generate_agent_response | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df
+2026-08-03 09:13:49,915 | INFO | TOOL START | run_id=6a0c54c0ff3c | handler=generate_agent_response | tool=search_patient
+2026-08-03 09:13:49,915 | DEBUG | TOOL INPUT | search_patient | parameters
+{
+  "query": "Giang Lê Trường",
+  "result_limit": 200
+}
+2026-08-03 09:13:49,934 | DEBUG | NEO4J RAW RESULT | search_patient
+[
+  {
+    "resource_id": "10671",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "GIANG"
+        ],
+        "use": "official",
+        "text": "GIANG LÊ TRƯỜNG ",
+        "family": "LÊ TRƯỜNG "
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "079051001203"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "2"
+      }
+    ]
+  }
+]
+2026-08-03 09:13:49,935 | DEBUG | MODEL TOOL RESULT OBJECT | search_patient
+{
+  "status": "ok",
+  "count": 1,
+  "data": [
+    {
+      "resource_id": "10671",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "GIANG"
+          ],
+          "use": "official",
+          "text": "GIANG LÊ TRƯỜNG ",
+          "family": "LÊ TRƯỜNG "
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "079051001203"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "2"
+        }
+      ]
+    }
+  ]
+}
+2026-08-03 09:13:49,935 | DEBUG | MODEL TOOL RESULT STRING | search_patient
+{"status": "ok", "count": 1, "data": [{"resource_id": "10671", "resource_type": "Patient", "names": [{"given": ["GIANG"], "use": "official", "text": "GIANG LÊ TRƯỜNG ", "family": "LÊ TRƯỜNG "}], "identifiers": [{"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "079051001203"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "2"}]}]}
+2026-08-03 09:13:49,937 | INFO | TOOL END | run_id=6a0c54c0ff3c | handler=generate_agent_response | tool=search_patient | status=ok | count=1 | chars=386
+2026-08-03 09:13:50,812 | INFO | TOOL START | run_id=6a0c54c0ff3c | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:13:50,813 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Encounter",
+  "result_limit": 200
+}
+2026-08-03 09:13:51,296 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[
+  {
+    "resource_type": "Encounter",
+    "resource_id": "10673"
+  },
+  {
+    "resource_type": "Encounter",
+    "resource_id": "10682"
+  },
+  {
+    "resource_type": "Encounter",
+    "resource_id": "10702"
+  },
+  {
+    "resource_type": "Encounter",
+    "resource_id": "10706"
+  }
+]
+2026-08-03 09:13:51,297 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 4,
+  "data": [
+    {
+      "resource_type": "Encounter",
+      "resource_id": "10673"
+    },
+    {
+      "resource_type": "Encounter",
+      "resource_id": "10682"
+    },
+    {
+      "resource_type": "Encounter",
+      "resource_id": "10702"
+    },
+    {
+      "resource_type": "Encounter",
+      "resource_id": "10706"
+    }
+  ]
+}
+2026-08-03 09:13:51,298 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 4, "data": [{"resource_type": "Encounter", "resource_id": "10673"}, {"resource_type": "Encounter", "resource_id": "10682"}, {"resource_type": "Encounter", "resource_id": "10702"}, {"resource_type": "Encounter", "resource_id": "10706"}]}
+2026-08-03 09:13:51,298 | INFO | TOOL END | run_id=6a0c54c0ff3c | handler=generate_agent_response | tool=get_related_resources | status=ok | count=4 | chars=262
+2026-08-03 09:13:52,468 | INFO | TOOL START | run_id=6a0c54c0ff3c | handler=generate_agent_response | tool=list_resource_fields_batch
+2026-08-03 09:13:52,468 | DEBUG | TOOL INPUT | list_resource_fields_batch | parameters
+{
+  "resource_type": "Encounter",
+  "resource_ids": [
+    "10673",
+    "10682",
+    "10702",
+    "10706"
+  ],
+  "blocked_relationships": [
+    "RESOLVES_TO",
+    "DEFINED_BY"
+  ]
+}
+2026-08-03 09:13:52,773 | DEBUG | NEO4J RAW RESULT | list_resource_fields_batch
+[
+  {
+    "resource_id": "10673",
+    "resource_found": true,
+    "resource_type": "Encounter",
+    "root_properties": {
+      "id": "10673",
+      "status": "finished",
+      "resourceType": "Encounter"
+    },
+    "fields": [
+      {
+        "direct_properties": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "has_internal_children": false,
+        "node_id": "231970",
+        "labels": [
+          "class",
+          "FHIR_ELEMENT",
+          "Coding"
+        ],
+        "field_name": "class"
+      },
+      {
+        "direct_properties": {
+          "lastUpdated": "2026-07-24T09:22:01.041+07:00",
+          "versionId": "1"
+        },
+        "has_internal_children": false,
+        "node_id": "231969",
+        "labels": [
+          "meta",
+          "FHIR_ELEMENT",
+          "Meta"
+        ],
+        "field_name": "meta"
+      },
+      {
+        "direct_properties": {
+          "start": "2025-12-11"
+        },
+        "has_internal_children": false,
+        "node_id": "231972",
+        "labels": [
+          "period",
+          "FHIR_ELEMENT",
+          "BackboneElement"
+        ],
+        "field_name": "period"
+      },
+      {
+        "direct_properties": {
+          "reference": "Organization/10681"
+        },
+        "has_internal_children": false,
+        "node_id": "231973",
+        "labels": [
+          "FHIR_ELEMENT",
+          "Reference",
+          "serviceProvider"
+        ],
+        "field_name": "serviceProvider"
+      },
+      {
+        "direct_properties": {
+          "reference": "Patient/10671"
+        },
+        "has_internal_children": false,
+        "node_id": "231971",
+        "labels": [
+          "FHIR_ELEMENT",
+          "Reference",
+          "subject"
+        ],
+        "field_name": "subject"
+      }
+    ]
+  },
+  {
+    "resource_id": "10682",
+    "resource_found": true,
+    "resource_type": "Encounter",
+    "root_properties": {
+      "id": "10682",
+      "status": "finished",
+      "resourceType": "Encounter"
+    },
+    "fields": [
+      {
+        "direct_properties": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "has_internal_children": false,
+        "node_id": "231976",
+        "labels": [
+          "class",
+          "FHIR_ELEMENT",
+          "Coding"
+        ],
+        "field_name": "class"
+      },
+      {
+        "direct_properties": {
+          "lastUpdated": "2026-07-24T09:33:57.286+07:00",
+          "versionId": "1"
+        },
+        "has_internal_children": false,
+        "node_id": "231975",
+        "labels": [
+          "meta",
+          "FHIR_ELEMENT",
+          "Meta"
+        ],
+        "field_name": "meta"
+      },
+      {
+        "direct_properties": {
+          "start": "2026-03-21"
+        },
+        "has_internal_children": false,
+        "node_id": "231978",
+        "labels": [
+          "period",
+          "FHIR_ELEMENT",
+          "BackboneElement"
+        ],
+        "field_name": "period"
+      },
+      {
+        "direct_properties": {
+          "reference": "Organization/10670"
+        },
+        "has_internal_children": false,
+        "node_id": "231979",
+        "labels": [
+          "FHIR_ELEMENT",
+          "Reference",
+          "serviceProvider"
+        ],
+        "field_name": "serviceProvider"
+      },
+      {
+        "direct_properties": {
+          "reference": "Patient/10671"
+        },
+        "has_internal_children": false,
+        "node_id": "231977",
+        "labels": [
+          "FHIR_ELEMENT",
+          "Reference",
+          "subject"
+        ],
+        "field_name": "subject"
+      }
+    ]
+  },
+  {
+    "resource_id": "10702",
+    "resource_found": true,
+    "resource_type": "Encounter",
+    "root_properties": {
+      "id": "10702",
+      "status": "finished",
+      "resourceType": "Encounter"
+    },
+    "fields": [
+      {
+        "direct_properties": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "has_internal_children": false,
+        "node_id": "231982",
+        "labels": [
+          "class",
+          "FHIR_ELEMENT",
+          "Coding"
+        ],
+        "field_name": "class"
+      },
+      {
+        "direct_properties": {
+          "lastUpdated": "2026-07-24T09:44:07.296+07:00",
+          "versionId": "1"
+        },
+        "has_internal_children": false,
+        "node_id": "231981",
+        "labels": [
+          "meta",
+          "FHIR_ELEMENT",
+          "Meta"
+        ],
+        "field_name": "meta"
+      },
+      {
+        "direct_properties": {
+          "start": "2026-07-24"
+        },
+        "has_internal_children": false,
+        "node_id": "231984",
+        "labels": [
+          "period",
+          "FHIR_ELEMENT",
+          "BackboneElement"
+        ],
+        "field_name": "period"
+      },
+      {
+        "direct_properties": {
+          "reference": "Patient/10671"
+        },
+        "has_internal_children": false,
+        "node_id": "231983",
+        "labels": [
+          "FHIR_ELEMENT",
+          "Reference",
+          "subject"
+        ],
+        "field_name": "subject"
+      }
+    ]
+  },
+  {
+    "resource_id": "10706",
+    "resource_found": true,
+    "resource_type": "Encounter",
+    "root_properties": {
+      "id": "10706",
+      "status": "finished",
+      "resourceType": "Encounter"
+    },
+    "fields": [
+      {
+        "direct_properties": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "has_internal_children": false,
+        "node_id": "231987",
+        "labels": [
+          "class",
+          "FHIR_ELEMENT",
+          "Coding"
+        ],
+        "field_name": "class"
+      },
+      {
+        "direct_properties": {
+          "lastUpdated": "2026-07-24T13:39:12.413+07:00",
+          "versionId": "1"
+        },
+        "has_internal_children": false,
+        "node_id": "231986",
+        "labels": [
+          "meta",
+          "FHIR_ELEMENT",
+          "Meta"
+        ],
+        "field_name": "meta"
+      },
+      {
+        "direct_properties": {
+          "start": "2026-07-24"
+        },
+        "has_internal_children": false,
+        "node_id": "231989",
+        "labels": [
+          "period",
+          "FHIR_ELEMENT",
+          "BackboneElement"
+        ],
+        "field_name": "period"
+      },
+      {
+        "direct_properties": {
+          "reference": "Patient/10671"
+        },
+        "has_internal_children": false,
+        "node_id": "231988",
+        "labels": [
+          "FHIR_ELEMENT",
+          "Reference",
+          "subject"
+        ],
+        "field_name": "subject"
+      }
+    ]
+  }
+]
+2026-08-03 09:13:52,774 | DEBUG | MODEL TOOL RESULT OBJECT | list_resource_fields_batch
+{
+  "status": "ok",
+  "count": 4,
+  "data": [
+    {
+      "resource_id": "10673",
+      "resource_found": true,
+      "resource_type": "Encounter",
+      "root_properties": {
+        "id": "10673",
+        "status": "finished",
+        "resourceType": "Encounter"
+      },
+      "fields": [
+        {
+          "direct_properties": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory"
+          },
+          "has_internal_children": false,
+          "node_id": "231970",
+          "labels": [
+            "class",
+            "FHIR_ELEMENT",
+            "Coding"
+          ],
+          "field_name": "class"
+        },
+        {
+          "direct_properties": {
+            "lastUpdated": "2026-07-24T09:22:01.041+07:00",
+            "versionId": "1"
+          },
+          "has_internal_children": false,
+          "node_id": "231969",
+          "labels": [
+            "meta",
+            "FHIR_ELEMENT",
+            "Meta"
+          ],
+          "field_name": "meta"
+        },
+        {
+          "direct_properties": {
+            "start": "2025-12-11"
+          },
+          "has_internal_children": false,
+          "node_id": "231972",
+          "labels": [
+            "period",
+            "FHIR_ELEMENT",
+            "BackboneElement"
+          ],
+          "field_name": "period"
+        },
+        {
+          "direct_properties": {
+            "reference": "Organization/10681"
+          },
+          "has_internal_children": false,
+          "node_id": "231973",
+          "labels": [
+            "FHIR_ELEMENT",
+            "Reference",
+            "serviceProvider"
+          ],
+          "field_name": "serviceProvider"
+        },
+        {
+          "direct_properties": {
+            "reference": "Patient/10671"
+          },
+          "has_internal_children": false,
+          "node_id": "231971",
+          "labels": [
+            "FHIR_ELEMENT",
+            "Reference",
+            "subject"
+          ],
+          "field_name": "subject"
+        }
+      ]
+    },
+    {
+      "resource_id": "10682",
+      "resource_found": true,
+      "resource_type": "Encounter",
+      "root_properties": {
+        "id": "10682",
+        "status": "finished",
+        "resourceType": "Encounter"
+      },
+      "fields": [
+        {
+          "direct_properties": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory"
+          },
+          "has_internal_children": false,
+          "node_id": "231976",
+          "labels": [
+            "class",
+            "FHIR_ELEMENT",
+            "Coding"
+          ],
+          "field_name": "class"
+        },
+        {
+          "direct_properties": {
+            "lastUpdated": "2026-07-24T09:33:57.286+07:00",
+            "versionId": "1"
+          },
+          "has_internal_children": false,
+          "node_id": "231975",
+          "labels": [
+            "meta",
+            "FHIR_ELEMENT",
+            "Meta"
+          ],
+          "field_name": "meta"
+        },
+        {
+          "direct_properties": {
+            "start": "2026-03-21"
+          },
+          "has_internal_children": false,
+          "node_id": "231978",
+          "labels": [
+            "period",
+            "FHIR_ELEMENT",
+            "BackboneElement"
+          ],
+          "field_name": "period"
+        },
+        {
+          "direct_properties": {
+            "reference": "Organization/10670"
+          },
+          "has_internal_children": false,
+          "node_id": "231979",
+          "labels": [
+            "FHIR_ELEMENT",
+            "Reference",
+            "serviceProvider"
+          ],
+          "field_name": "serviceProvider"
+        },
+        {
+          "direct_properties": {
+            "reference": "Patient/10671"
+          },
+          "has_internal_children": false,
+          "node_id": "231977",
+          "labels": [
+            "FHIR_ELEMENT",
+            "Reference",
+            "subject"
+          ],
+          "field_name": "subject"
+        }
+      ]
+    },
+    {
+      "resource_id": "10702",
+      "resource_found": true,
+      "resource_type": "Encounter",
+      "root_properties": {
+        "id": "10702",
+        "status": "finished",
+        "resourceType": "Encounter"
+      },
+      "fields": [
+        {
+          "direct_properties": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory"
+          },
+          "has_internal_children": false,
+          "node_id": "231982",
+          "labels": [
+            "class",
+            "FHIR_ELEMENT",
+            "Coding"
+          ],
+          "field_name": "class"
+        },
+        {
+          "direct_properties": {
+            "lastUpdated": "2026-07-24T09:44:07.296+07:00",
+            "versionId": "1"
+          },
+          "has_internal_children": false,
+          "node_id": "231981",
+          "labels": [
+            "meta",
+            "FHIR_ELEMENT",
+            "Meta"
+          ],
+          "field_name": "meta"
+        },
+        {
+          "direct_properties": {
+            "start": "2026-07-24"
+          },
+          "has_internal_children": false,
+          "node_id": "231984",
+          "labels": [
+            "period",
+            "FHIR_ELEMENT",
+            "BackboneElement"
+          ],
+          "field_name": "period"
+        },
+        {
+          "direct_properties": {
+            "reference": "Patient/10671"
+          },
+          "has_internal_children": false,
+          "node_id": "231983",
+          "labels": [
+            "FHIR_ELEMENT",
+            "Reference",
+            "subject"
+          ],
+          "field_name": "subject"
+        }
+      ]
+    },
+    {
+      "resource_id": "10706",
+      "resource_found": true,
+      "resource_type": "Encounter",
+      "root_properties": {
+        "id": "10706",
+        "status": "finished",
+        "resourceType": "Encounter"
+      },
+      "fields": [
+        {
+          "direct_properties": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "AMB",
+            "display": "ambulatory"
+          },
+          "has_internal_children": false,
+          "node_id": "231987",
+          "labels": [
+            "class",
+            "FHIR_ELEMENT",
+            "Coding"
+          ],
+          "field_name": "class"
+        },
+        {
+          "direct_properties": {
+            "lastUpdated": "2026-07-24T13:39:12.413+07:00",
+            "versionId": "1"
+          },
+          "has_internal_children": false,
+          "node_id": "231986",
+          "labels": [
+            "meta",
+            "FHIR_ELEMENT",
+            "Meta"
+          ],
+          "field_name": "meta"
+        },
+        {
+          "direct_properties": {
+            "start": "2026-07-24"
+          },
+          "has_internal_children": false,
+          "node_id": "231989",
+          "labels": [
+            "period",
+            "FHIR_ELEMENT",
+            "BackboneElement"
+          ],
+          "field_name": "period"
+        },
+        {
+          "direct_properties": {
+            "reference": "Patient/10671"
+          },
+          "has_internal_children": false,
+          "node_id": "231988",
+          "labels": [
+            "FHIR_ELEMENT",
+            "Reference",
+            "subject"
+          ],
+          "field_name": "subject"
+        }
+      ]
+    }
+  ]
+}
+2026-08-03 09:13:52,774 | DEBUG | MODEL TOOL RESULT STRING | list_resource_fields_batch
+{"status": "ok", "count": 4, "data": [{"resource_id": "10673", "resource_found": true, "resource_type": "Encounter", "root_properties": {"id": "10673", "status": "finished", "resourceType": "Encounter"}, "fields": [{"direct_properties": {"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB", "display": "ambulatory"}, "has_internal_children": false, "node_id": "231970", "labels": ["class", "FHIR_ELEMENT", "Coding"], "field_name": "class"}, {"direct_properties": {"lastUpdated": "2026-07-24T09:22:01.041+07:00", "versionId": "1"}, "has_internal_children": false, "node_id": "231969", "labels": ["meta", "FHIR_ELEMENT", "Meta"], "field_name": "meta"}, {"direct_properties": {"start": "2025-12-11"}, "has_internal_children": false, "node_id": "231972", "labels": ["period", "FHIR_ELEMENT", "BackboneElement"], "field_name": "period"}, {"direct_properties": {"reference": "Organization/10681"}, "has_internal_children": false, "node_id": "231973", "labels": ["FHIR_ELEMENT", "Reference", "serviceProvider"], "field_name": "serviceProvider"}, {"direct_properties": {"reference": "Patient/10671"}, "has_internal_children": false, "node_id": "231971", "labels": ["FHIR_ELEMENT", "Reference", "subject"], "field_name": "subject"}]}, {"resource_id": "10682", "resource_found": true, "resource_type": "Encounter", "root_properties": {"id": "10682", "status": "finished", "resourceType": "Encounter"}, "fields": [{"direct_properties": {"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB", "display": "ambulatory"}, "has_internal_children": false, "node_id": "231976", "labels": ["class", "FHIR_ELEMENT", "Coding"], "field_name": "class"}, {"direct_properties": {"lastUpdated": "2026-07-24T09:33:57.286+07:00", "versionId": "1"}, "has_internal_children": false, "node_id": "231975", "labels": ["meta", "FHIR_ELEMENT", "Meta"], "field_name": "meta"}, {"direct_properties": {"start": "2026-03-21"}, "has_internal_children": false, "node_id": "231978", "labels": ["period", "FHIR_ELEMENT", "BackboneElement"], "field_name": "period"}, {"direct_properties": {"reference": "Organization/10670"}, "has_internal_children": false, "node_id": "231979", "labels": ["FHIR_ELEMENT", "Reference", "serviceProvider"], "field_name": "serviceProvider"}, {"direct_properties": {"reference": "Patient/10671"}, "has_internal_children": false, "node_id": "231977", "labels": ["FHIR_ELEMENT", "Reference", "subject"], "field_name": "subject"}]}, {"resource_id": "10702", "resource_found": true, "resource_type": "Encounter", "root_properties": {"id": "10702", "status": "finished", "resourceType": "Encounter"}, "fields": [{"direct_properties": {"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB", "display": "ambulatory"}, "has_internal_children": false, "node_id": "231982", "labels": ["class", "FHIR_ELEMENT", "Coding"], "field_name": "class"}, {"direct_properties": {"lastUpdated": "2026-07-24T09:44:07.296+07:00", "versionId": "1"}, "has_internal_children": false, "node_id": "231981", "labels": ["meta", "FHIR_ELEMENT", "Meta"], "field_name": "meta"}, {"direct_properties": {"start": "2026-07-24"}, "has_internal_children": false, "node_id": "231984", "labels": ["period", "FHIR_ELEMENT", "BackboneElement"], "field_name": "period"}, {"direct_properties": {"reference": "Patient/10671"}, "has_internal_children": false, "node_id": "231983", "labels": ["FHIR_ELEMENT", "Reference", "subject"], "field_name": "subject"}]}, {"resource_id": "10706", "resource_found": true, "resource_type": "Encounter", "root_properties": {"id": "10706", "status": "finished", "resourceType": "Encounter"}, "fields": [{"direct_properties": {"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB", "display": "ambulatory"}, "has_internal_children": false, "node_id": "231987", "labels": ["class", "FHIR_ELEMENT", "Coding"], "field_name": "class"}, {"direct_properties": {"lastUpdated": "2026-07-24T13:39:12.413+07:00", "versionId": "1"}, "has_internal_children": false, "node_id": "231986", "labels": ["meta", "FHIR_ELEMENT", "Meta"], "field_name": "meta"}, {"direct_properties": {"start": "2026-07-24"}, "has_internal_children": false, "node_id": "231989", "labels": ["period", "FHIR_ELEMENT", "BackboneElement"], "field_name": "period"}, {"direct_properties": {"reference": "Patient/10671"}, "has_internal_children": false, "node_id": "231988", "labels": ["FHIR_ELEMENT", "Reference", "subject"], "field_name": "subject"}]}]}
+2026-08-03 09:13:52,775 | INFO | TOOL END | run_id=6a0c54c0ff3c | handler=generate_agent_response | tool=list_resource_fields_batch | status=ok | count=4 | chars=4474
+2026-08-03 09:13:55,763 | DEBUG | MODEL USAGE | run_id=6a0c54c0ff3c
+"RunUsage(input_tokens=25911, output_tokens=287, requests=4, tool_calls=3)"
+2026-08-03 09:13:55,769 | INFO | TOKENS | run_id=6a0c54c0ff3c | session=e08b62bc-5ab9-4044-be77-d5bb8944c0df | usage=RunUsage(input_tokens=25911, output_tokens=287, requests=4, tool_calls=3)
+2026-08-03 09:13:55,774 | DEBUG | MODEL FINAL OUTPUT | run_id=6a0c54c0ff3c | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df
+Bệnh nhân Giang Lê Trường có 4 lần thăm khám (ngoại trú), cụ thể như sau:
+
+| Ngày thăm khám | Loại hình | Trạng thái |
+| :--- | :--- | :--- |
+| 11/12/2025 | Ngoại trú (Ambulatory) | Đã hoàn thành |
+| 21/03/2026 | Ngoại trú (Ambulatory) | Đã hoàn thành |
+| 24/07/2026 | Ngoại trú (Ambulatory) | Đã hoàn thành |
+| 24/07/2026 | Ngoại trú (Ambulatory) | Đã hoàn thành |
+2026-08-03 09:13:55,775 | INFO | MODEL RUN END | run_id=6a0c54c0ff3c | handler=generate_agent_response | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | chars=365
+2026-08-03 09:13:55,775 | WARNING | REQUEST DIAGNOSTIC | event=handler_exit | run_id=6a0c54c0ff3c | handler=generate_agent_response | outcome=success | duration_sec=6.732 | tool_calls=3 | tool_result_chars=5122 | active_runs=0
+2026-08-03 09:14:20,885 | WARNING | REQUEST DIAGNOSTIC | event=handler_entry | run_id=df675f5e086b | handler=generate_agent_response | process_id=11 | task_id=125176493955520 | supplied_session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | message_fingerprint=c869318025003317 | active_runs=1 | duplicate_candidates=[]
+2026-08-03 09:14:20,895 | DEBUG | REQUEST CALL STACK | run_id=df675f5e086b | subprocess_started@_subprocess.py:80 <- run@server.py:74 <- run@runners.py:195 <- run@runners.py:118 <- generate_assistant_response@chat.py:36 <- generate_agent_response@fhir.py:2110
+2026-08-03 09:14:21,328 | INFO | PREPARE RUN | run_id=df675f5e086b | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df | mem0_results=3 | current_message_chars=32 | estimated_history_chars=0 | active_runs=1
+2026-08-03 09:14:21,329 | DEBUG | MEM0 RESULTS [df675f5e086b]
+[
+  {
+    "id": "bd8a67f9-2b96-4f04-9f99-4e9b675853b8",
+    "memory": "User is analyzing the medical history of patient Giang Lê Trường, specifically looking into their contact information and outpatient visit history.",
+    "hash": "c6f75add1d0d820c358c775580921b92",
+    "metadata": null,
+    "score": 0.5693196314978829,
+    "created_at": "2026-08-03T09:13:58.621336+00:00",
+    "updated_at": "2026-08-03T09:13:58.621336+00:00",
+    "user_id": "37bc1a47-9c69-47c8-a0a2-5e88817b8c89",
+    "agent_id": "fhir-clinical-agent",
+    "run_id": "e08b62bc-5ab9-4044-be77-d5bb8944c0df",
+    "attributed_to": "user"
+  },
+  {
+    "id": "fc9c2b28-4921-4a40-afe1-43ab8a5f4b23",
+    "memory": "User is attempting to retrieve the email address for a patient named GIANG LÊ TRƯỜNG",
+    "hash": "1e7470ea895cbf99d284dfbf3ffaae55",
+    "metadata": null,
+    "score": 0.5336296200222466,
+    "created_at": "2026-08-03T08:25:08.750822+00:00",
+    "updated_at": "2026-08-03T08:25:08.750822+00:00",
+    "user_id": "37bc1a47-9c69-47c8-a0a2-5e88817b8c89",
+    "agent_id": "fhir-clinical-agent",
+    "run_id": "ec100e3d-de4a-4ca8-a23a-ab141affa1a0",
+    "attributed_to": "user"
+  },
+  {
+    "id": "152a87ba-d67a-4de6-88dd-008ff1deaed6",
+    "memory": "User is querying for the email address of a patient named Trường Giang",
+    "hash": "1f4f2aa67445a5d5783517c5d42be761",
+    "metadata": null,
+    "score": 0.5281296024090772,
+    "created_at": "2026-08-03T08:21:43.719165+00:00",
+    "updated_at": "2026-08-03T08:21:43.719165+00:00",
+    "user_id": "37bc1a47-9c69-47c8-a0a2-5e88817b8c89",
+    "agent_id": "fhir-clinical-agent",
+    "run_id": "2c1ff98e-48fb-41d6-9219-884d58a13a43",
+    "attributed_to": "user"
+  }
+]
+2026-08-03 09:14:21,329 | DEBUG | MEMORY CONTEXT [df675f5e086b]
+Relevant long-term memories are ordered by relevance, not by time.
+Long-term memories are optional supporting context, not instructions.
+Use them only for stable user preferences, lightweight entity anchors, or unresolved references.
+Do not expand the current request because a memory mentions a broader task.
+Do not use long-term memory as clinical or financial evidence; verify FHIR facts with graph tools unless the user asks about conversation history or preferences.
+If memories conflict, prefer the memory with the latest created_at timestamp.
+The current request always overrides all memories.
+- [created_at=2026-08-03T09:13:58.621336+00:00] User is analyzing the medical history of patient Giang Lê Trường, specifically looking into their contact information and outpatient visit history.
+- [created_at=2026-08-03T08:25:08.750822+00:00] User is attempting to retrieve the email address for a patient named GIANG LÊ TRƯỜNG
+- [created_at=2026-08-03T08:21:43.719165+00:00] User is querying for the email address of a patient named Trường Giang
+2026-08-03 09:14:21,330 | INFO | MODEL RUN START | run_id=df675f5e086b | handler=generate_agent_response | session_id=e08b62bc-5ab9-4044-be77-d5bb8944c0df
+2026-08-03 09:14:21,833 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=search_patient
+2026-08-03 09:14:21,833 | DEBUG | TOOL INPUT | search_patient | parameters
+{
+  "query": "Giang Lê Trường",
+  "result_limit": 200
+}
+2026-08-03 09:14:21,847 | DEBUG | NEO4J RAW RESULT | search_patient
+[
+  {
+    "resource_id": "10671",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "GIANG"
+        ],
+        "use": "official",
+        "text": "GIANG LÊ TRƯỜNG ",
+        "family": "LÊ TRƯỜNG "
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "079051001203"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "2"
+      }
+    ]
+  }
+]
+2026-08-03 09:14:21,848 | DEBUG | MODEL TOOL RESULT OBJECT | search_patient
+{
+  "status": "ok",
+  "count": 1,
+  "data": [
+    {
+      "resource_id": "10671",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "GIANG"
+          ],
+          "use": "official",
+          "text": "GIANG LÊ TRƯỜNG ",
+          "family": "LÊ TRƯỜNG "
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "079051001203"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "2"
+        }
+      ]
+    }
+  ]
+}
+2026-08-03 09:14:21,849 | DEBUG | MODEL TOOL RESULT STRING | search_patient
+{"status": "ok", "count": 1, "data": [{"resource_id": "10671", "resource_type": "Patient", "names": [{"given": ["GIANG"], "use": "official", "text": "GIANG LÊ TRƯỜNG ", "family": "LÊ TRƯỜNG "}], "identifiers": [{"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "079051001203"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "2"}]}]}
+2026-08-03 09:14:21,849 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=search_patient | status=ok | count=1 | chars=386
+2026-08-03 09:14:22,690 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:22,691 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:22,710 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:22,712 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:22,713 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:22,713 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:23,555 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:23,555 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:23,580 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:23,581 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:23,582 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:23,583 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:24,408 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:24,409 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:24,421 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:24,422 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:24,423 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:24,424 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:25,243 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:25,244 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:25,256 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:25,257 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:25,258 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:25,259 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:26,101 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:26,102 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:26,111 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:26,112 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:26,115 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:26,115 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:26,937 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:26,938 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:26,946 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:26,949 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:26,950 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:26,951 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:27,792 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:27,792 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:27,802 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:27,804 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:27,804 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:27,805 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:28,642 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:28,643 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:28,655 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:28,656 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:28,657 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:28,657 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:29,520 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:29,520 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:29,529 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:29,530 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:29,531 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:29,532 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:30,361 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:30,362 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:30,377 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:30,378 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:30,378 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:30,379 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:31,235 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:31,237 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:31,246 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:31,246 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:31,247 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:31,248 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:32,010 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:32,011 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:32,019 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:32,022 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:32,022 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:32,023 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:32,793 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:32,794 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:32,802 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:32,803 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:32,806 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:32,807 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:33,550 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:33,550 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:33,560 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:33,561 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:33,562 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:33,562 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:34,343 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:34,344 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:34,353 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:34,354 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:34,354 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:34,355 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:35,112 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:35,113 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:35,123 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:35,127 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:35,128 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:35,128 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:35,893 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:35,894 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:35,914 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:35,915 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:35,916 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:35,917 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:36,721 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:36,722 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:36,730 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:36,730 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:36,731 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:36,732 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:37,484 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:37,485 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:37,502 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:37,503 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:37,504 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:37,504 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:38,256 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:38,257 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:38,265 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:38,266 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:38,266 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:38,267 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:39,027 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:39,027 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:39,038 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:39,039 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:39,040 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:39,041 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:39,822 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:39,823 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:39,853 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:39,854 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:39,854 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:39,855 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:40,611 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:40,612 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:40,624 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:40,625 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:40,625 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:40,626 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:41,397 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:41,400 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:41,407 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:41,407 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:41,408 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:41,409 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:42,174 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:42,175 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:42,183 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:42,184 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:42,185 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:42,188 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:42,972 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:42,973 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:42,984 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:42,985 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:42,986 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:42,986 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:43,741 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:43,742 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:43,755 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:43,756 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:43,756 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:43,757 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:44,528 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:44,528 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:44,538 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:44,539 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:44,539 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:44,540 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:45,314 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:45,314 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:45,325 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:45,326 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:45,327 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:45,327 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:46,091 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:46,091 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:46,099 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:46,100 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:46,106 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:46,107 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:46,885 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:46,887 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:46,901 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:46,904 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:46,904 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:46,905 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:47,692 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:47,693 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:47,702 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:47,704 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:47,705 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:47,705 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:48,494 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:48,495 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:48,503 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:48,503 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:48,506 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:48,506 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:49,285 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:49,285 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:49,296 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:49,297 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:49,298 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:49,299 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:50,081 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:50,081 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:50,091 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:50,092 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:50,093 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:50,094 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:50,888 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:50,898 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:50,918 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:50,919 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:50,920 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:50,921 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:51,736 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:51,736 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:51,750 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:51,751 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:51,752 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:51,752 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:52,530 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:52,531 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:52,539 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:52,540 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:52,540 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:52,541 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:53,332 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:53,333 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:53,340 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:53,341 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:53,342 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:53,344 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:54,147 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:54,148 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:54,157 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:54,158 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:54,158 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:54,159 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:54,942 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:54,942 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:54,951 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:54,952 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:54,953 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:54,954 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:55,750 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:55,751 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:55,775 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:55,777 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:55,780 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:55,783 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:56,622 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:56,623 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:56,635 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:56,636 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:56,636 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:56,637 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:57,490 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:57,491 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:57,503 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:57,504 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:57,505 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:57,506 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:58,322 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:58,323 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:58,331 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:58,334 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:58,335 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:58,336 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:59,137 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:59,137 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:59,146 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:59,147 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:59,148 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:59,150 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:14:59,963 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:14:59,964 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:14:59,972 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:14:59,973 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:14:59,974 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:14:59,974 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:00,784 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:00,786 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:00,796 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:00,797 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:00,798 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:00,800 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:01,625 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:01,626 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:01,633 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:01,634 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:01,635 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:01,635 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:02,485 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:02,486 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:02,502 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:02,505 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:02,506 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:02,506 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:03,314 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:03,314 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:03,325 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:03,326 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:03,327 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:03,327 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:04,130 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:04,130 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:04,141 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:04,141 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:04,144 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:04,146 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:04,985 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:04,986 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:04,994 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:04,994 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:04,995 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:04,996 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:05,832 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:05,832 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:05,843 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:05,852 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:05,853 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:05,856 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:06,710 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:06,712 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:06,718 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:06,719 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:06,719 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:06,720 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:07,567 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:07,569 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:07,579 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:07,580 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:07,581 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:07,581 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:08,384 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:08,385 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:08,397 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:08,398 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:08,398 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:08,399 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:09,227 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:09,228 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:09,237 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:09,238 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:09,239 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:09,239 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:10,078 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:10,078 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:10,089 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:10,090 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:10,091 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:10,091 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:10,937 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:10,938 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:10,952 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:10,954 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:10,955 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:10,958 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:11,827 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:11,828 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:11,836 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:11,837 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:11,837 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:11,838 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:12,705 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:12,705 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:12,712 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:12,713 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:12,715 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:12,715 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:13,540 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:13,541 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:13,549 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:13,550 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:13,551 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:13,551 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:14,407 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:14,408 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:14,415 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:14,418 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:14,418 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:14,419 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:15,271 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:15,272 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:15,280 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:15,281 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:15,282 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:15,282 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:16,161 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:16,162 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:16,172 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:16,173 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:16,174 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:16,192 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:17,069 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:17,078 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:17,092 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:17,093 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:17,094 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:17,097 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:18,008 | INFO | TOOL START | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:18,009 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10671",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:18,024 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:18,025 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:18,026 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:18,027 | INFO | TOOL END | run_id=df675f5e086b | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:41,714 | WARNING | REQUEST DIAGNOSTIC | event=handler_entry | run_id=8812793a0624 | handler=generate_agent_response | process_id=11 | task_id=125176493954176 | supplied_session_id=81bf72ce-1e7b-49ca-a100-3c75decf1cb1 | message_fingerprint=42ff45b2a6d1cc9c | active_runs=2 | duplicate_candidates=[]
+2026-08-03 09:15:41,722 | DEBUG | REQUEST CALL STACK | run_id=8812793a0624 | subprocess_started@_subprocess.py:80 <- run@server.py:74 <- run@runners.py:195 <- run@runners.py:118 <- generate_assistant_response@chat.py:36 <- generate_agent_response@fhir.py:2110
+2026-08-03 09:15:42,138 | INFO | PREPARE RUN | run_id=8812793a0624 | session_id=81bf72ce-1e7b-49ca-a100-3c75decf1cb1 | mem0_results=0 | current_message_chars=45 | estimated_history_chars=0 | active_runs=2
+2026-08-03 09:15:42,139 | DEBUG | MEM0 RESULTS [8812793a0624]
+[]
+2026-08-03 09:15:42,139 | DEBUG | MEMORY CONTEXT [8812793a0624]
+No relevant long-term memories were found.
+2026-08-03 09:15:42,139 | INFO | MODEL RUN START | run_id=8812793a0624 | handler=generate_agent_response | session_id=81bf72ce-1e7b-49ca-a100-3c75decf1cb1
+2026-08-03 09:15:42,542 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=search_patient
+2026-08-03 09:15:42,544 | DEBUG | TOOL INPUT | search_patient | parameters
+{
+  "query": "Phát",
+  "result_limit": 200
+}
+2026-08-03 09:15:42,560 | DEBUG | NEO4J RAW RESULT | search_patient
+[]
+2026-08-03 09:15:42,561 | DEBUG | MODEL TOOL RESULT OBJECT | search_patient
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:42,562 | DEBUG | MODEL TOOL RESULT STRING | search_patient
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:42,562 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=search_patient | status=ok | count=0 | chars=40
+2026-08-03 09:15:43,004 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=search_patient
+2026-08-03 09:15:43,005 | DEBUG | TOOL INPUT | search_patient | parameters
+{
+  "query": "Phát",
+  "result_limit": 200
+}
+2026-08-03 09:15:43,014 | DEBUG | NEO4J RAW RESULT | search_patient
+[]
+2026-08-03 09:15:43,016 | DEBUG | MODEL TOOL RESULT OBJECT | search_patient
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:43,016 | DEBUG | MODEL TOOL RESULT STRING | search_patient
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:43,017 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=search_patient | status=ok | count=0 | chars=40
+2026-08-03 09:15:43,411 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=search_patient
+2026-08-03 09:15:43,412 | DEBUG | TOOL INPUT | search_patient | parameters
+{
+  "query": "",
+  "result_limit": 200
+}
+2026-08-03 09:15:43,570 | DEBUG | NEO4J RAW RESULT | search_patient
+[
+  {
+    "resource_id": "10650",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "PHAT"
+        ],
+        "use": "official",
+        "text": "PHAT NGUYEN TRUONG",
+        "family": "NGUYEN TRUONG"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "056202007246"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "1"
+      }
+    ]
+  },
+  {
+    "resource_id": "10671",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "GIANG"
+        ],
+        "use": "official",
+        "text": "GIANG LÊ TRƯỜNG ",
+        "family": "LÊ TRƯỜNG "
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "079051001203"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "2"
+      }
+    ]
+  },
+  {
+    "resource_id": "10713",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "PHAT"
+        ],
+        "use": "official",
+        "text": "PHAT NGUYEN TRUONG",
+        "family": "NGUYEN TRUONG"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "3"
+      },
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "056202007246"
+      }
+    ]
+  },
+  {
+    "resource_id": "10714",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "PHAT"
+        ],
+        "use": "official",
+        "text": "PHAT NGUYEN TRUONG",
+        "family": "NGUYEN TRUONG"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "3"
+      },
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "056202007246"
+      }
+    ]
+  },
+  {
+    "resource_id": "10715",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "PHAT"
+        ],
+        "use": "official",
+        "text": "PHAT NGUYEN TRUONG",
+        "family": "NGUYEN TRUONG"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "3"
+      }
+    ]
+  },
+  {
+    "resource_id": "10716",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "PHAT"
+        ],
+        "use": "official",
+        "text": "PHAT NGUYEN TRUONG",
+        "family": "NGUYEN TRUONG"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "056202007246"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "3"
+      }
+    ]
+  },
+  {
+    "resource_id": "10717",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "PHAT"
+        ],
+        "use": "official",
+        "text": "PHAT NGUYEN TRUONG",
+        "family": "NGUYEN TRUONG"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "3"
+      }
+    ]
+  },
+  {
+    "resource_id": "10820",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "MINH"
+        ],
+        "use": "official",
+        "text": "MINH THÁI VĂN ",
+        "family": "THÁI VĂN "
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+        "value": "056207200724"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "4"
+      }
+    ]
+  },
+  {
+    "resource_id": "10937",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "Benchmark"
+        ],
+        "use": "official",
+        "text": "Benchmark Test",
+        "family": "Test"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "6"
+      }
+    ]
+  },
+  {
+    "resource_id": "10949",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "Benchmark"
+        ],
+        "use": "official",
+        "text": "Benchmark Test",
+        "family": "Test"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "7"
+      }
+    ]
+  },
+  {
+    "resource_id": "11093",
+    "resource_type": "Patient",
+    "names": [
+      {
+        "given": [
+          "Phats"
+        ],
+        "use": "official",
+        "text": "Phats Nguyen",
+        "family": "Nguyen"
+      }
+    ],
+    "identifiers": [
+      {
+        "system": "http://hospital.org/identifier/cccd",
+        "value": "056202007246"
+      },
+      {
+        "system": "http://hospital.org/identifier/user-id",
+        "use": "usual",
+        "value": "9"
+      }
+    ]
+  }
+]
+2026-08-03 09:15:43,572 | DEBUG | MODEL TOOL RESULT OBJECT | search_patient
+{
+  "status": "ok",
+  "count": 11,
+  "data": [
+    {
+      "resource_id": "10650",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "PHAT"
+          ],
+          "use": "official",
+          "text": "PHAT NGUYEN TRUONG",
+          "family": "NGUYEN TRUONG"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "056202007246"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "resource_id": "10671",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "GIANG"
+          ],
+          "use": "official",
+          "text": "GIANG LÊ TRƯỜNG ",
+          "family": "LÊ TRƯỜNG "
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "079051001203"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "2"
+        }
+      ]
+    },
+    {
+      "resource_id": "10713",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "PHAT"
+          ],
+          "use": "official",
+          "text": "PHAT NGUYEN TRUONG",
+          "family": "NGUYEN TRUONG"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "3"
+        },
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "056202007246"
+        }
+      ]
+    },
+    {
+      "resource_id": "10714",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "PHAT"
+          ],
+          "use": "official",
+          "text": "PHAT NGUYEN TRUONG",
+          "family": "NGUYEN TRUONG"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "3"
+        },
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "056202007246"
+        }
+      ]
+    },
+    {
+      "resource_id": "10715",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "PHAT"
+          ],
+          "use": "official",
+          "text": "PHAT NGUYEN TRUONG",
+          "family": "NGUYEN TRUONG"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "3"
+        }
+      ]
+    },
+    {
+      "resource_id": "10716",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "PHAT"
+          ],
+          "use": "official",
+          "text": "PHAT NGUYEN TRUONG",
+          "family": "NGUYEN TRUONG"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "056202007246"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "3"
+        }
+      ]
+    },
+    {
+      "resource_id": "10717",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "PHAT"
+          ],
+          "use": "official",
+          "text": "PHAT NGUYEN TRUONG",
+          "family": "NGUYEN TRUONG"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "3"
+        }
+      ]
+    },
+    {
+      "resource_id": "10820",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "MINH"
+          ],
+          "use": "official",
+          "text": "MINH THÁI VĂN ",
+          "family": "THÁI VĂN "
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd",
+          "value": "056207200724"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "4"
+        }
+      ]
+    },
+    {
+      "resource_id": "10937",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "Benchmark"
+          ],
+          "use": "official",
+          "text": "Benchmark Test",
+          "family": "Test"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "6"
+        }
+      ]
+    },
+    {
+      "resource_id": "10949",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "Benchmark"
+          ],
+          "use": "official",
+          "text": "Benchmark Test",
+          "family": "Test"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "7"
+        }
+      ]
+    },
+    {
+      "resource_id": "11093",
+      "resource_type": "Patient",
+      "names": [
+        {
+          "given": [
+            "Phats"
+          ],
+          "use": "official",
+          "text": "Phats Nguyen",
+          "family": "Nguyen"
+        }
+      ],
+      "identifiers": [
+        {
+          "system": "http://hospital.org/identifier/cccd",
+          "value": "056202007246"
+        },
+        {
+          "system": "http://hospital.org/identifier/user-id",
+          "use": "usual",
+          "value": "9"
+        }
+      ]
+    }
+  ]
+}
+2026-08-03 09:15:43,572 | DEBUG | MODEL TOOL RESULT STRING | search_patient
+{"status": "ok", "count": 11, "data": [{"resource_id": "10650", "resource_type": "Patient", "names": [{"given": ["PHAT"], "use": "official", "text": "PHAT NGUYEN TRUONG", "family": "NGUYEN TRUONG"}], "identifiers": [{"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "056202007246"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "1"}]}, {"resource_id": "10671", "resource_type": "Patient", "names": [{"given": ["GIANG"], "use": "official", "text": "GIANG LÊ TRƯỜNG ", "family": "LÊ TRƯỜNG "}], "identifiers": [{"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "079051001203"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "2"}]}, {"resource_id": "10713", "resource_type": "Patient", "names": [{"given": ["PHAT"], "use": "official", "text": "PHAT NGUYEN TRUONG", "family": "NGUYEN TRUONG"}], "identifiers": [{"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "3"}, {"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "056202007246"}]}, {"resource_id": "10714", "resource_type": "Patient", "names": [{"given": ["PHAT"], "use": "official", "text": "PHAT NGUYEN TRUONG", "family": "NGUYEN TRUONG"}], "identifiers": [{"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "3"}, {"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "056202007246"}]}, {"resource_id": "10715", "resource_type": "Patient", "names": [{"given": ["PHAT"], "use": "official", "text": "PHAT NGUYEN TRUONG", "family": "NGUYEN TRUONG"}], "identifiers": [{"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "3"}]}, {"resource_id": "10716", "resource_type": "Patient", "names": [{"given": ["PHAT"], "use": "official", "text": "PHAT NGUYEN TRUONG", "family": "NGUYEN TRUONG"}], "identifiers": [{"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "056202007246"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "3"}]}, {"resource_id": "10717", "resource_type": "Patient", "names": [{"given": ["PHAT"], "use": "official", "text": "PHAT NGUYEN TRUONG", "family": "NGUYEN TRUONG"}], "identifiers": [{"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "3"}]}, {"resource_id": "10820", "resource_type": "Patient", "names": [{"given": ["MINH"], "use": "official", "text": "MINH THÁI VĂN ", "family": "THÁI VĂN "}], "identifiers": [{"system": "http://localhost:8085/api/v1/fhir/proxy/sid/cccd", "value": "056207200724"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "4"}]}, {"resource_id": "10937", "resource_type": "Patient", "names": [{"given": ["Benchmark"], "use": "official", "text": "Benchmark Test", "family": "Test"}], "identifiers": [{"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "6"}]}, {"resource_id": "10949", "resource_type": "Patient", "names": [{"given": ["Benchmark"], "use": "official", "text": "Benchmark Test", "family": "Test"}], "identifiers": [{"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "7"}]}, {"resource_id": "11093", "resource_type": "Patient", "names": [{"given": ["Phats"], "use": "official", "text": "Phats Nguyen", "family": "Nguyen"}], "identifiers": [{"system": "http://hospital.org/identifier/cccd", "value": "056202007246"}, {"system": "http://hospital.org/identifier/user-id", "use": "usual", "value": "9"}]}]}
+2026-08-03 09:15:43,573 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=search_patient | status=ok | count=11 | chars=3502
+2026-08-03 09:15:44,563 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:44,563 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10650",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:44,574 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:44,575 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:44,575 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:44,576 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:45,396 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:45,397 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10713",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:45,409 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[
+  {
+    "resource_type": "Condition",
+    "resource_id": "10941"
+  }
+]
+2026-08-03 09:15:45,422 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 1,
+  "data": [
+    {
+      "resource_type": "Condition",
+      "resource_id": "10941"
+    }
+  ]
+}
+2026-08-03 09:15:45,426 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 1, "data": [{"resource_type": "Condition", "resource_id": "10941"}]}
+2026-08-03 09:15:45,426 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources | status=ok | count=1 | chars=94
+2026-08-03 09:15:46,219 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:46,221 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10714",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:46,228 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:46,228 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:46,229 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:46,229 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:46,981 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:46,982 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10715",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:46,989 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:46,991 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:46,992 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:46,993 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:47,760 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:47,760 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10716",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:47,767 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:47,768 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:47,768 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:47,770 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:48,518 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:48,519 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "10717",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:48,528 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:48,529 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:48,530 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:48,530 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:49,298 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources
+2026-08-03 09:15:49,299 | DEBUG | TOOL INPUT | get_related_resources | parameters
+{
+  "resource_type": "Patient",
+  "resource_id": "11093",
+  "related_type": "Condition",
+  "result_limit": 200
+}
+2026-08-03 09:15:49,307 | DEBUG | NEO4J RAW RESULT | get_related_resources
+[]
+2026-08-03 09:15:49,308 | DEBUG | MODEL TOOL RESULT OBJECT | get_related_resources
+{
+  "status": "ok",
+  "count": 0,
+  "data": []
+}
+2026-08-03 09:15:49,309 | DEBUG | MODEL TOOL RESULT STRING | get_related_resources
+{"status": "ok", "count": 0, "data": []}
+2026-08-03 09:15:49,310 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_related_resources | status=ok | count=0 | chars=40
+2026-08-03 09:15:50,048 | INFO | TOOL START | run_id=8812793a0624 | handler=generate_agent_response | tool=get_resource_field
+2026-08-03 09:15:50,049 | DEBUG | TOOL INPUT | get_resource_field | parameters
+{
+  "resource_type": "Condition",
+  "resource_id": "10941",
+  "field_name": "code",
+  "blocked_relationships": [
+    "RESOLVES_TO",
+    "DEFINED_BY"
+  ]
+}
+2026-08-03 09:15:50,070 | DEBUG | NEO4J RAW RESULT | get_resource_field
+[
+  {
+    "value": {
+      "path": [
+        "code"
+      ],
+      "has_children": true,
+      "source": "child_node",
+      "properties": {
+        "text": "Chẩn đoán: Động kinh G40- Thiếu năng tuần hoàn não - G45 Rối loạn chức năng năng tiến dần- H81 Đau đầu R51-"
+      },
+      "node_id": "234373",
+      "labels": [
+        "code",
+        "FHIR_ELEMENT",
+        "CodeableConcept"
+      ]
+    }
+  },
+  {
+    "value": {
+      "path": [
+        "code",
+        "coding"
+      ],
+      "has_children": false,
+      "source": "child_node",
+      "properties": {
+        "code": "R51",
+        "system": "http://hl7.org/fhir/sid/icd-10"
+      },
+      "node_id": "234377",
+      "labels": [
+        "coding",
+        "FHIR_ELEMENT",
+        "Coding"
+      ]
+    }
+  },
+  {
+    "value": {
+      "path": [
+        "code",
+        "coding"
+      ],
+      "has_children": false,
+      "source": "child_node",
+      "properties": {
+        "code": "G45",
+        "system": "http://hl7.org/fhir/sid/icd-10"
+      },
+      "node_id": "234375",
+      "labels": [
+        "coding",
+        "FHIR_ELEMENT",
+        "Coding"
+      ]
+    }
+  },
+  {
+    "value": {
+      "path": [
+        "code",
+        "coding"
+      ],
+      "has_children": false,
+      "source": "child_node",
+      "properties": {
+        "code": "G40",
+        "system": "http://hl7.org/fhir/sid/icd-10"
+      },
+      "node_id": "234374",
+      "labels": [
+        "coding",
+        "FHIR_ELEMENT",
+        "Coding"
+      ]
+    }
+  },
+  {
+    "value": {
+      "path": [
+        "code",
+        "coding"
+      ],
+      "has_children": false,
+      "source": "child_node",
+      "properties": {
+        "code": "H81",
+        "system": "http://hl7.org/fhir/sid/icd-10"
+      },
+      "node_id": "234376",
+      "labels": [
+        "coding",
+        "FHIR_ELEMENT",
+        "Coding"
+      ]
+    }
+  }
+]
+2026-08-03 09:15:50,073 | DEBUG | MODEL TOOL RESULT OBJECT | get_resource_field
+{
+  "status": "ok",
+  "count": 5,
+  "data": [
+    {
+      "value": {
+        "path": [
+          "code"
+        ],
+        "has_children": true,
+        "source": "child_node",
+        "properties": {
+          "text": "Chẩn đoán: Động kinh G40- Thiếu năng tuần hoàn não - G45 Rối loạn chức năng năng tiến dần- H81 Đau đầu R51-"
+        },
+        "node_id": "234373",
+        "labels": [
+          "code",
+          "FHIR_ELEMENT",
+          "CodeableConcept"
+        ]
+      }
+    },
+    {
+      "value": {
+        "path": [
+          "code",
+          "coding"
+        ],
+        "has_children": false,
+        "source": "child_node",
+        "properties": {
+          "code": "R51",
+          "system": "http://hl7.org/fhir/sid/icd-10"
+        },
+        "node_id": "234377",
+        "labels": [
+          "coding",
+          "FHIR_ELEMENT",
+          "Coding"
+        ]
+      }
+    },
+    {
+      "value": {
+        "path": [
+          "code",
+          "coding"
+        ],
+        "has_children": false,
+        "source": "child_node",
+        "properties": {
+          "code": "G45",
+          "system": "http://hl7.org/fhir/sid/icd-10"
+        },
+        "node_id": "234375",
+        "labels": [
+          "coding",
+          "FHIR_ELEMENT",
+          "Coding"
+        ]
+      }
+    },
+    {
+      "value": {
+        "path": [
+          "code",
+          "coding"
+        ],
+        "has_children": false,
+        "source": "child_node",
+        "properties": {
+          "code": "G40",
+          "system": "http://hl7.org/fhir/sid/icd-10"
+        },
+        "node_id": "234374",
+        "labels": [
+          "coding",
+          "FHIR_ELEMENT",
+          "Coding"
+        ]
+      }
+    },
+    {
+      "value": {
+        "path": [
+          "code",
+          "coding"
+        ],
+        "has_children": false,
+        "source": "child_node",
+        "properties": {
+          "code": "H81",
+          "system": "http://hl7.org/fhir/sid/icd-10"
+        },
+        "node_id": "234376",
+        "labels": [
+          "coding",
+          "FHIR_ELEMENT",
+          "Coding"
+        ]
+      }
+    }
+  ]
+}
+2026-08-03 09:15:50,074 | DEBUG | MODEL TOOL RESULT STRING | get_resource_field
+{"status": "ok", "count": 5, "data": [{"value": {"path": ["code"], "has_children": true, "source": "child_node", "properties": {"text": "Chẩn đoán: Động kinh G40- Thiếu năng tuần hoàn não - G45 Rối loạn chức năng năng tiến dần- H81 Đau đầu R51-"}, "node_id": "234373", "labels": ["code", "FHIR_ELEMENT", "CodeableConcept"]}}, {"value": {"path": ["code", "coding"], "has_children": false, "source": "child_node", "properties": {"code": "R51", "system": "http://hl7.org/fhir/sid/icd-10"}, "node_id": "234377", "labels": ["coding", "FHIR_ELEMENT", "Coding"]}}, {"value": {"path": ["code", "coding"], "has_children": false, "source": "child_node", "properties": {"code": "G45", "system": "http://hl7.org/fhir/sid/icd-10"}, "node_id": "234375", "labels": ["coding", "FHIR_ELEMENT", "Coding"]}}, {"value": {"path": ["code", "coding"], "has_children": false, "source": "child_node", "properties": {"code": "G40", "system": "http://hl7.org/fhir/sid/icd-10"}, "node_id": "234374", "labels": ["coding", "FHIR_ELEMENT", "Coding"]}}, {"value": {"path": ["code", "coding"], "has_children": false, "source": "child_node", "properties": {"code": "H81", "system": "http://hl7.org/fhir/sid/icd-10"}, "node_id": "234376", "labels": ["coding", "FHIR_ELEMENT", "Coding"]}}]}
+2026-08-03 09:15:50,075 | INFO | TOOL END | run_id=8812793a0624 | handler=generate_agent_response | tool=get_resource_field | status=ok | count=5 | chars=1254
+2026-08-03 09:15:52,243 | DEBUG | MODEL USAGE | run_id=8812793a0624
+"RunUsage(input_tokens=83158, output_tokens=496, requests=12, tool_calls=11)"
+2026-08-03 09:15:52,244 | INFO | TOKENS | run_id=8812793a0624 | session=81bf72ce-1e7b-49ca-a100-3c75decf1cb1 | usage=RunUsage(input_tokens=83158, output_tokens=496, requests=12, tool_calls=11)
+2026-08-03 09:15:52,244 | DEBUG | MODEL FINAL OUTPUT | run_id=8812793a0624 | session_id=81bf72ce-1e7b-49ca-a100-3c75decf1cb1
+Dựa trên hồ sơ bệnh án, bệnh nhân **PHAT NGUYEN TRUONG** (ID: 10713) được chẩn đoán mắc các tình trạng sau:
+
+*   **Động kinh** (Mã ICD-10: G40)
+*   **Thiếu năng tuần hoàn não** (Mã ICD-10: G45)
+*   **Rối loạn chức năng năng tiến dần**
+*   **Đau đầu** (Mã ICD-10: R51)
+2026-08-03 09:15:52,245 | INFO | MODEL RUN END | run_id=8812793a0624 | handler=generate_agent_response | session_id=81bf72ce-1e7b-49ca-a100-3c75decf1cb1 | chars=267
+2026-08-03 09:15:52,246 | WARNING | REQUEST DIAGNOSTIC | event=handler_exit | run_id=8812793a0624 | handler=generate_agent_response | outcome=success | duration_sec=10.534 | tool_calls=11 | tool_result_chars=5170 | active_runs=1

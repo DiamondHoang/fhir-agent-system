@@ -1,0 +1,189 @@
+# Healthcare Context Graph & CyFHIR — Unified System Docker Compose
+#
+# Usage:
+#   docker compose up --build -d
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: fhir-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fhir_agent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-vector.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fhir_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: fhir-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' 2>/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  neo4j:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cyfhir-neo4j
+    container_name: fhir-cyfhir-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_HOST: 0.0.0.0
+      NEO4J_AUTH: none
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*,cyfhir.*,gds.*
+      NEO4J_dbms_memory_pagecache_size: 1G
+      NEO4J_dbms_memory_heap_max__size: 4G
+      NEO4J_apoc_export_file_enabled: "true"
+      NEO4J_apoc_import_file_enabled: "true"
+      NEO4J_apoc_import_file_use__neo4j__config: "true"
+      NEO4J_dbms_security_procedures_whitelisted: apoc.*,cyfhir.*,gds.*
+    ports:
+      - "7474:7474"
+      - "7473:7473"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+
+  cyfhir-express:
+    build:
+      context: ./cyfhir-express
+      dockerfile: ../docker/Dockerfile.express
+    container_name: fhir-cyfhir-express
+    restart: unless-stopped
+    ports:
+      - "${CYFHIR_EXPRESS_PORT:-3001}:3001"
+    environment:
+      PORT: 3001
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "password"
+    volumes:
+      - ./cyfhir-express:/app
+      - express_node_modules:/app/node_modules
+    depends_on:
+      - neo4j
+
+  cyfhir-seed:
+    image: curlimages/curl:latest
+    container_name: fhir-cyfhir-seed
+    restart: "no"
+    entrypoint: ["/bin/sh", "/scripts/seed-neo4j.sh"]
+    environment:
+      CYFHIR_EXPRESS_URL: "http://cyfhir-express:3001"
+      BUNDLES_DIR: "/data/synthea-bundles"
+      FHIR_SERVER_URL: "${FHIR_SERVER_URL:-http://172.16.12.230:8012/fhir}"
+    volumes:
+      - ./docker/scripts/seed-neo4j.sh:/scripts/seed-neo4j.sh:ro
+      - ./data/synthea-bundles:/data/synthea-bundles:ro
+    depends_on:
+      - cyfhir-express
+      - neo4j
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: fhir-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-password}
+      CYFHIR_EXPRESS_URL: http://cyfhir-express:3001
+      INTERNAL_LLM_BASE_URL: ${INTERNAL_LLM_BASE_URL}
+      INTERNAL_LLM_API_KEY: ${INTERNAL_LLM_API_KEY}
+      INTERNAL_LLM_MODEL: ${INTERNAL_LLM_MODEL}
+      INTERNAL_EMBEDDING_BASE_URL: ${INTERNAL_EMBEDDING_BASE_URL}
+      INTERNAL_EMBEDDING_API_KEY: ${INTERNAL_EMBEDDING_API_KEY}
+      INTERNAL_EMBEDDING_MODEL: ${INTERNAL_EMBEDDING_MODEL}
+      INTERNAL_EMBEDDING_DIMS: ${INTERNAL_EMBEDDING_DIMS:-768}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fhir_agent}
+      MEM0_AGENT_ID: ${MEM0_AGENT_ID:-fhir-clinical-agent}
+      MEM0_VECTOR_STORE_PROVIDER: pgvector
+      MEM0_COLLECTION_NAME: ${MEM0_COLLECTION_NAME:-fhir_agent_memories}
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/fhir_agent
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev_secret_key_change_in_production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      SKIN_VISION_BASE_URL: ${SKIN_VISION_BASE_URL:-}
+      SKIN_VISION_MODEL: ${SKIN_VISION_MODEL:-}
+      SKIN_REASONING_BASE_URL: ${SKIN_REASONING_BASE_URL:-}
+      SKIN_REASONING_MODEL: ${SKIN_REASONING_MODEL:-}
+      SKIN_EMBEDDING_BASE_URL: ${SKIN_EMBEDDING_BASE_URL:-}
+      SKIN_EMBEDDING_API_KEY: ${SKIN_EMBEDDING_API_KEY:-}
+      SKIN_EMBEDDING_MODEL: ${SKIN_EMBEDDING_MODEL:-}
+      SKIN_QDRANT_URL: http://qdrant:6333
+      SKIN_QDRANT_COLLECTION: ${SKIN_QDRANT_COLLECTION:-disease_symptoms}
+      VISION_MODEL_URL: ${VISION_MODEL_URL:-http://172.16.12.230:8000}
+      VISION_MODEL_DEFAULT: ${VISION_MODEL_DEFAULT:-gemma-4-26B-A4B-it}
+      VISION_MODEL_PREFER: ${VISION_MODEL_PREFER:-gemma-4}
+      VISION_MODEL_TIMEOUT: ${VISION_MODEL_TIMEOUT:-600}
+      REASONING_MODEL_URL: ${REASONING_MODEL_URL:-http://172.16.12.230:8000}
+      REASONING_MODEL_DEFAULT: ${REASONING_MODEL_DEFAULT:-gemma-4-26B-A4B-it}
+      REASONING_MODEL_PREFER: ${REASONING_MODEL_PREFER:-gemma-4}
+      REASONING_MODEL_TIMEOUT: ${REASONING_MODEL_TIMEOUT:-1200}
+      EMBEDDING_URL: ${EMBEDDING_URL:-http://172.16.12.230:8004}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+      EMBEDDING_TIMEOUT: ${EMBEDDING_TIMEOUT:-120}
+      QDRANT_MODE: server
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-disease_symptoms}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: fhir-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  neo4j_data:
+  frontend_node_modules:
+  frontend_next:
+  express_node_modules:
