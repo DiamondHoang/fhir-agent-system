@@ -364,6 +364,87 @@ def _build_diagnosis_summary(state: dict) -> str:
     )
 
 
+async def _save_interview_round_to_memory(
+    session_id: str, run, qa_pairs: list[tuple], round_label: str
+) -> None:
+    """Persist one round's raw Q&A into both memory tiers, right when the
+    round finishes — otherwise these 5-10 exchanges only ever lived in the
+    in-memory session store and vanished once the pipeline finished, since
+    only the final diagnosis summary used to get saved.
+
+    Short-term (Postgres `Message` rows, same table the regular chat flow
+    uses): each question becomes an assistant message, each answer a user
+    message, linked to the run's `conversation_id`. `short_term_memory.py`
+    then picks these up automatically as normal conversation history for
+    that conversation — no separate code path needed there.
+
+    Long-term (Mem0): the round's raw exchange is handed to the existing
+    `save_conversation_memory` / extraction prompt, which decides what (if
+    anything) is worth keeping as a durable fact — it already refuses to
+    store patient-specific values like exact dates, drugs, or diagnoses.
+    """
+    if run is None or not qa_pairs:
+        return
+
+    lines = [f"{q.get('question', '')} → {a}" for q, a in qa_pairs]
+    qa_text = "\n".join(lines)
+
+    if run.conversation_id:
+        import uuid as uuid_module
+
+        from app.db.models import Conversation, Message
+        from app.db.session import AsyncSessionFactory
+
+        try:
+            conversation_uuid = uuid_module.UUID(run.conversation_id)
+            async with AsyncSessionFactory() as db:
+                db.add(
+                    Message(
+                        conversation_id=conversation_uuid,
+                        role="assistant",
+                        content=f"[{round_label}] Các câu hỏi triệu chứng:\n" + "\n".join(
+                            f"{i + 1}. {q.get('question', '')}" for i, (q, _a) in enumerate(qa_pairs)
+                        ),
+                        message_type="interview_qa",
+                    )
+                )
+                db.add(
+                    Message(
+                        conversation_id=conversation_uuid,
+                        role="user",
+                        content="\n".join(
+                            f"{i + 1}. {a}" for i, (_q, a) in enumerate(qa_pairs)
+                        ),
+                        message_type="interview_qa",
+                    )
+                )
+                conversation = await db.get(Conversation, conversation_uuid)
+                if conversation is not None:
+                    conversation.updated_at = datetime.now(timezone.utc)
+                await db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to save %s Q&A as short-term messages for run %s",
+                round_label,
+                session_id,
+            )
+
+    if run.user_id:
+        try:
+            await save_conversation_memory(
+                user_id=run.user_id,
+                session_id=session_id,
+                user_message=f"[{round_label}] Trả lời câu hỏi triệu chứng:\n{qa_text}",
+                assistant_message=f"Đã hỏi {len(qa_pairs)} câu hỏi triệu chứng ({round_label}) để phục vụ chẩn đoán.",
+            )
+        except Exception:
+            logger.exception(
+                "Failed to save %s Q&A to long-term memory for run %s",
+                round_label,
+                session_id,
+            )
+
+
 async def _save_diagnosis_to_memory(session_id: str, anamnesis: str, state: dict, run) -> None:
     """Persist the completed dermatology diagnosis into the shared (Mem0)
     long-term memory so later chat turns can recall it — this is the same
@@ -652,6 +733,8 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
         await store.update(session_id, status="running", current_step="user_interview_round1")
         state["round1_qa_pairs"] = await _run_interview_round(store, session_id, "user_interview_round1", state["round1_questions"], answered_so_far=0)
         state["qa_history"] = format_clinical_summary(state["round1_qa_pairs"]) if state["round1_qa_pairs"] else "(Không có câu hỏi)"
+        run = await store.get(session_id)
+        await _save_interview_round_to_memory(session_id, run, state["round1_qa_pairs"], "Round 1")
 
         # Step 3: Round 2 — planner questions (aware of Round 1 answers), then interview
         await store.update(session_id, status="running", current_step="clinical_planner_round2")
@@ -664,6 +747,7 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
         state["round2_qa_pairs"] = await _run_interview_round(
             store, session_id, "user_interview_round2", state["round2_questions"], answered_so_far=len(state["round1_qa_pairs"]),
         )
+        await _save_interview_round_to_memory(session_id, run, state["round2_qa_pairs"], "Round 2")
         if state["round2_qa_pairs"]:
             state["qa_history"] = format_clinical_summary(state["round1_qa_pairs"] + state["round2_qa_pairs"])
 

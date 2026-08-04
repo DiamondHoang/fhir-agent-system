@@ -42,6 +42,8 @@ async def create_conversation_with_user_message(
     db: AsyncSession,
     user_id: UUID,
     first_message: str,
+    message_type: str = "text",
+    image_url: str | None = None,
 ) -> tuple[Conversation, Message]:
     conversation = Conversation(
         user_id=user_id,
@@ -55,6 +57,8 @@ async def create_conversation_with_user_message(
             conversation_id=conversation.id,
             role="user",
             content=first_message,
+            message_type=message_type,
+            image_url=image_url,
         )
         db.add(user_message)
         await db.commit()

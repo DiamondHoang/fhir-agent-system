@@ -1529,7 +1529,7 @@ import {
 import {
   Send, RotateCcw, ChevronDown, Bot, User, Sparkles,
   Plus, Trash2, LogOut, ImagePlus, X, Stethoscope, Loader2, CheckCircle2,
-  PanelLeft, AlertCircle,
+  PanelLeft, AlertCircle, SquarePen,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1956,7 +1956,11 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     setError(null);
     try {
       const data = await listMessages(conversationId);
-      setMessages(data.items.map(mapBackendMessage));
+      setMessages(
+        data.items
+          .filter((item) => item.message_type !== "interview_qa")
+          .map(mapBackendMessage)
+      );
 
       // Re-hydrate attached photos. The thumbnail shown while chatting is a
       // local blob: URL that only lives for the current tab — after a
@@ -2589,16 +2593,15 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             <Button
               w="100%"
               size="sm"
-              variant="outline"
+              variant="ghost"
               justifyContent="flex-start"
-              borderWidth="1.5px"
-              borderColor="gray.300"
+              gap={2}
               color="gray.700"
-              bg="white"
-              _hover={{ borderColor: "#10a37f", color: "#10a37f", bg: "#10a37f0d" }}
+              fontWeight="medium"
+              _hover={{ bg: "gray.200" }}
               onClick={startNewConversation}
             >
-              <Plus size={16} />
+              <SquarePen size={16} />
               Cuộc trò chuyện mới
             </Button>
           </Box>
@@ -2885,7 +2888,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                             {msg.skinSubmitted && (
                               <HStack justify="center" mt={3} color="green.600" fontSize="xs" fontWeight="semibold">
                                 <CheckCircle2 size={16} />
-                                <Text>Đã gửi câu trả lời — Đang tổng hợp chẩn đoán...</Text>
+                                <Text>Đã gửi câu trả lời</Text>
                               </HStack>
                             )}
                           </Box>
@@ -2968,7 +2971,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                   <Circle size="8" bg="#10a37f" color="white" flexShrink={0} mt={1}>
                     <Bot size={16} />
                   </Circle>
-                  <Box bg="gray.50" borderWidth="1px" borderColor="gray.200" px={4} py={3} borderRadius="xl" flex={1}>
+                  <Box py={3}>
                     <TypingDots color="blue.500" />
                   </Box>
                 </Flex>
@@ -2993,7 +2996,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
               pt={filePreview ? 3 : 2}
               pb={2}
               shadow="sm"
-              _focusWithin={{ borderColor: "#10a37f", shadow: "md" }}
+              _focusWithin={{ borderColor: "transparent", shadow: "sm" }}
               transition="all 0.2s"
             >
               {/* Image Preview Chip — inside the input card, like ChatGPT */}
@@ -3049,7 +3052,8 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                   onKeyDown={handleKeyDown}
                   placeholder="Nhập tin nhắn..."
                   border="none"
-                  _focus={{ boxShadow: "none" }}
+                  outline="none"
+                  _focus={{ boxShadow: "none", outline: "none" }}
                   resize="none"
                   rows={1}
                   fontSize="sm"
