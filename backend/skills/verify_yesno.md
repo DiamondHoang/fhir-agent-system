@@ -6,10 +6,10 @@ PATIENT'S CHIEF COMPLAINT (ANAMNESIS):
 
 CRITICAL YES/NO RULES:
 1. STRICT "CÓ / KHÔNG" BINARY FORMAT & ENDINGS:
-   - ALL questions MUST end with "không?" or use the "Bạn có ... không?" sentence structure (e.g. "Bạn có từng bị tình trạng này trước đây không?").
+   - ALL questions MUST end with "không?" or use the "Bệnh nhân có ... không?" sentence structure (e.g. "Bệnh nhân có từng bị tình trạng này trước đây không?"). NEVER address the reader as "bạn"/"you" — the user is the treating doctor answering on the patient's behalf, so every question must refer to "bệnh nhân" in third person.
    - FORBIDDEN ENDINGS: Never end questions with "chưa?", "phải không?", or "đúng không?".
      * BAD: "Trước đây bạn đã từng bị tình trạng tương tự như thế này chưa?"
-     * GOOD: "Bạn có từng bị tình trạng tương tự trước đây không?"
+     * GOOD: "Bệnh nhân có từng bị tình trạng tương tự trước đây không?"
 
 2. NO SPECIFIC TIME DURATIONS:
    - If a question asks about specific time durations (e.g. "kéo dài trên 2 tuần không?", "bị 3 tháng rồi phải không?"), REPHRASE IT into an onset/progression question WITHOUT specific time quantities (e.g. "Tổn thương này có xuất hiện mới đây không?" or "Tổn thương có diễn tiến nhanh không?").
@@ -23,11 +23,11 @@ CRITICAL YES/NO RULES:
    - Read the patient's chief complaint above carefully.
    - If a question asks about something the patient ALREADY STATED in their complaint, REPHRASE it to ask about a DIFFERENT, genuinely unknown clinical aspect (same pqrst_category is fine, but the question topic must change).
    - EXAMPLE: Complaint = "các vệt nổi lên sau khi tôi gãi"
-     * FORBIDDEN (pre-answered): "Các vệt đỏ này có xuất hiện ngay sau khi bạn gãi không?" → already known: YES
-     * FORBIDDEN (pre-answered): "Các vệt đỏ này có xuất hiện tại những nơi bạn đã gãi không?" → already known: YES
-     * GOOD replacement: "Bạn có cảm giác ngứa dữ dội trước khi gãi không?" → genuinely unknown
+     * FORBIDDEN (pre-answered): "Các vệt đỏ này có xuất hiện ngay sau khi bệnh nhân gãi không?" → already known: YES
+     * FORBIDDEN (pre-answered): "Các vệt đỏ này có xuất hiện tại những nơi bệnh nhân đã gãi không?" → already known: YES
+     * GOOD replacement: "Bệnh nhân có cảm giác ngứa dữ dội trước khi gãi không?" → genuinely unknown
    - EXAMPLE: Complaint = "tôi bị ngứa 3 ngày"
-     * FORBIDDEN (pre-answered): "Bạn có cảm thấy ngứa không?" → already known: YES
+     * FORBIDDEN (pre-answered): "Bệnh nhân có cảm thấy ngứa không?" → already known: YES
 
 5. PREVENT DUPLICATES FROM PREVIOUS ROUNDS (STRICT DEDUPLICATION):
    - Review the PREVIOUS QUESTIONS (if provided below).

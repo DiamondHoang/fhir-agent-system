@@ -26,20 +26,22 @@ TASK 3 — GENERATE EXACTLY 5 HIGH-INFORMATION YES/NO QUESTIONS:
 These questions MUST differentiate between the candidate diagnoses (the original list PLUS anything you added in TASK 2) based on visual features and clinical history.
 
 CRITICAL QUESTION RULES:
-1. ALL questions MUST be answerable with "Có" or "Không" only, and MUST end with "không?" (e.g., "Bạn có ... không?").
+1. ALL questions MUST be answerable with "Có" or "Không" only, and MUST end with "không?" (e.g., "Bệnh nhân có ... không?").
+1b. ALWAYS phrase questions in THIRD PERSON referring to "bệnh nhân" (the patient) — NEVER address the reader as "bạn"/"you". The user filling this out is the treating doctor answering on the patient's behalf, not the patient themselves. Every question must read naturally as something a doctor would confirm about their patient (e.g., "Bệnh nhân có cảm thấy ngứa không?" not "Bạn có cảm thấy ngứa không?").
 2. ABSOLUTELY FORBIDDEN:
    - Ending questions with "chưa?", "phải không?", or "đúng không?".
    - Open-ended words: "bao lâu", "khi nào", "thế nào", "ra sao", "ở đâu", "bao nhiêu", "tại sao", "như thế nào", "gì", "cái gì", "loại gì".
    - Specific time durations: "1 tuần", "2 tuần", "3 tháng", "1 năm", "2 ngày", etc. (never ask "kéo dài trên X tuần" or similar).
+   - Second-person pronouns "bạn"/"của bạn" anywhere in the question text — use "bệnh nhân"/"của bệnh nhân" instead.
 3. Do NOT ask about visual characteristics already visible in the image.
 4. STRICTLY DO NOT ask questions whose answer is already revealed by the chief complaint (anamnesis). This is a hard rule — any question that the patient can answer trivially because they already stated it is FORBIDDEN.
    - EXAMPLE: If complaint = "các vệt nổi lên sau khi tôi gãi", then the following questions are FORBIDDEN:
-     * "Các vệt đỏ này có xuất hiện ngay sau khi bạn gãi không?" → answer is already YES from complaint
-     * "Các vệt đỏ này có xuất hiện tại những nơi bạn đã gãi không?" → answer is already YES from complaint
-   - EXAMPLE: If complaint = "tôi bị ngứa 3 ngày", then FORBIDDEN: "Bạn có cảm thấy ngứa không?" → already stated
-   - EXAMPLE: If complaint = "nổi mẩn đỏ sau khi dùng kem mới", then FORBIDDEN: "Bạn có dùng kem bôi mới không?" → already stated
+     * "Các vệt đỏ này có xuất hiện ngay sau khi bệnh nhân gãi không?" → answer is already YES from complaint
+     * "Các vệt đỏ này có xuất hiện tại những nơi bệnh nhân đã gãi không?" → answer is already YES from complaint
+   - EXAMPLE: If complaint = "tôi bị ngứa 3 ngày", then FORBIDDEN: "Bệnh nhân có cảm thấy ngứa không?" → already stated
+   - EXAMPLE: If complaint = "nổi mẩn đỏ sau khi dùng kem mới", then FORBIDDEN: "Bệnh nhân có dùng kem bôi mới không?" → already stated
    - Before finalizing each question, ask yourself: "Can this question be answered directly from what the patient already told me?" If YES → discard and replace with a genuinely new question.
-5. Questions MUST be simple enough for patients to understand — avoid medical terminology when possible.
+5. Questions MUST be simple enough for a doctor to quickly confirm with/about the patient — avoid medical terminology when possible.
 6. All text in "question", "discriminates", and "purpose" MUST be in clear, simple Vietnamese.
 
 QUESTION DIVERSITY RULES:
@@ -48,12 +50,12 @@ QUESTION DIVERSITY RULES:
 - Focus on the MOST discriminative features between the top candidate diseases (including anything added in TASK 2).
 - Each question should help eliminate or confirm at least one candidate diagnosis.
 
-PQRST FRAMEWORK — Questions MUST be simple, direct YES/NO questions for patient understanding:
-- P (Provocation/Trigger / Yếu tố khởi phát): Simple question about triggers. Example: "Tình trạng này có trở nên ngứa hơn sau khi vận động hoặc ra nhiều mồ hôi không?" or "Bạn có bị côn trùng cắn không?"
-- Q (Quality / Tính chất cảm giác): Simple sensation questions. Example: "Bạn cảm thấy ngứa không?" or "Nó có gây đau hay rát không?"
-  - IMPORTANT: check the "EXAM/HISTORY-ONLY DISTINGUISHING SIGNS" section below (from the knowledge base). Whatever it lists for the current candidate diseases — sensation loss, systemic symptoms, a named provoked sign, etc. — cannot be seen in the image. If it lists anything, TASK 3 MUST include at least one question (Q or S category, whichever fits) that lets the patient self-report that specific finding, phrased as a simple Có/Không question (e.g. a listed "mất cảm giác" cue becomes "Bạn có cảm thấy vùng da này kém nhạy cảm hơn (tê, giảm cảm giác nóng/lạnh/đau) so với vùng da xung quanh không?"). This rule is generic — it applies to whichever diseases are actually listed there for this case, not to any single fixed disease.
+PQRST FRAMEWORK — Questions MUST be simple, direct YES/NO questions, phrased in third person about the patient:
+- P (Provocation/Trigger / Yếu tố khởi phát): Simple question about triggers. Example: "Tình trạng này có trở nên ngứa hơn sau khi vận động hoặc ra nhiều mồ hôi không?" or "Bệnh nhân có bị côn trùng cắn không?"
+- Q (Quality / Tính chất cảm giác): Simple sensation questions. Example: "Bệnh nhân có cảm thấy ngứa không?" or "Nó có gây đau hay rát không?"
+  - IMPORTANT: check the "EXAM/HISTORY-ONLY DISTINGUISHING SIGNS" section below (from the knowledge base). Whatever it lists for the current candidate diseases — sensation loss, systemic symptoms, a named provoked sign, etc. — cannot be seen in the image. If it lists anything, TASK 3 MUST include at least one question (Q or S category, whichever fits) that lets the patient self-report that specific finding, phrased as a simple Có/Không question (e.g. a listed "mất cảm giác" cue becomes "Bệnh nhân có cảm thấy vùng da này kém nhạy cảm hơn (tê, giảm cảm giác nóng/lạnh/đau) so với vùng da xung quanh không?"). This rule is generic — it applies to whichever diseases are actually listed there for this case, not to any single fixed disease.
 - R (Region/Radiation / Vị trí & Hướng lan): Simple location questions. Example: "Đường tổn thương có lan theo dạng ngoằn ngoèo không?" or "Tổn thương có lan ra nhiều chỗ trên cơ thể không?"
-- S (Severity / Mức độ nặng): Simple impact questions. Example: "Nó có làm bạn mất ngủ không?" or "Nó có ảnh hưởng đến công việc/học tập không?"
+- S (Severity / Mức độ nặng): Simple impact questions. Example: "Nó có làm bệnh nhân mất ngủ không?" or "Nó có ảnh hưởng đến công việc/học tập của bệnh nhân không?"
 - T (Time / Thời gian khởi phát và diễn tiến): Simple time questions about progression (NO specific durations). Example: "Tổn thương này xuất hiện lần đầu tiên không?" or "Nó có xuất hiện và biến mất rồi tái phát không?"
 
 CURRENT PATIENT CASE:

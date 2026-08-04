@@ -26,13 +26,13 @@ FALLBACK_QUESTIONS_BY_CATEGORY = {
     "Q": [
         {
             "pqrst_category": "Q",
-            "question": "Bạn có cảm thấy ngứa hoặc rát tại tổn thương không?",
+            "question": "Bệnh nhân có cảm thấy ngứa hoặc rát tại tổn thương không?",
             "purpose": "Đánh giá tính chất cảm giác của tổn thương",
             "discriminates": [],
         },
         {
             "pqrst_category": "Q",
-            "question": "Bạn có cảm thấy vùng da tổn thương kém nhạy cảm hơn (tê, giảm cảm giác nóng/lạnh/đau) so với vùng da xung quanh không?",
+            "question": "Bệnh nhân có cảm thấy vùng da tổn thương kém nhạy cảm hơn (tê, giảm cảm giác nóng/lạnh/đau) so với vùng da xung quanh không?",
             "purpose": "Đánh giá mất cảm giác tại chỗ — dấu hiệu định hướng bệnh phong",
             "discriminates": [],
         },
@@ -60,7 +60,7 @@ FALLBACK_QUESTIONS_BY_CATEGORY = {
         },
         {
             "pqrst_category": "S",
-            "question": "Tổn thương có ảnh hưởng đến giấc ngủ của bạn không?",
+            "question": "Tổn thương có ảnh hưởng đến giấc ngủ của bệnh nhân không?",
             "purpose": "Đánh giá mức độ nghiêm trọng qua ảnh hưởng giấc ngủ",
             "discriminates": [],
         },
