@@ -2624,6 +2624,21 @@ before calling anything:
       diagnosis yourself — report what diagnose_skin_condition returns
       (an existing result, an in-progress run, or instructions to attach a
       photo) and relay that to the user.
+      A skin diagnosis result is about the uploaded photo only — it is NOT
+      automatically linked to any named patient. If the request that
+      triggered it did not name a patient, treat that result as belonging
+      to an unidentified/unnamed subject.
+
+IDENTITY GUARD — do not let a recent skin diagnosis leak onto a different,
+named patient. If the current request asks about a specific patient by
+name or identifier (e.g. "bệnh nhân Nam Vũ bị bệnh gì?"), that is ALWAYS
+category 1 (PATIENT / RECORD DATA REQUEST) — call search_patient / FHIR
+graph tools for that name, even if a skin diagnosis was just produced in
+this same conversation. Only reuse a prior skin diagnosis result to answer
+a named-patient question if that name was explicitly the subject of that
+diagnosis request. When in doubt about whether the previous diagnosis and
+the newly named patient are the same person, look them up in FHIR rather
+than assuming.
 
 A single request may need both in sequence (e.g. "look up this patient's
 last visit, then diagnose the rash they mentioned") — in that case, call
@@ -4527,6 +4542,11 @@ request.
 Do not reuse, continue, summarize, or copy previous assistant answers unless
 the current request explicitly asks for that.
 If the current request asks for a subset, answer only that subset.
+If the current request names a specific patient and conversation history
+contains a skin diagnosis result, do NOT assume they are the same person —
+look the named patient up in FHIR instead of answering from that prior
+diagnosis, unless the diagnosis was explicitly about that same named
+patient.
 
 <long_term_memory>
 {memory_prompt}
