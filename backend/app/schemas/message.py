@@ -1,6 +1,7 @@
 """Pydantic schemas for conversation messages."""
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -29,6 +30,12 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     created_at: datetime
+    # Lets the frontend rebuild the rich view (attached photo, structured
+    # dermatology result card) after a reload instead of only having the
+    # plain-text `content` to fall back to.
+    message_type: str = "text"
+    image_url: str | None = None
+    structured_data: dict[str, Any] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

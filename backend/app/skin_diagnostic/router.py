@@ -51,6 +51,14 @@ async def start_skin_diagnostic(
     # exactly like the regular chat flow does for the first message.
     first_message = anamnesis.strip() or "Yêu cầu chẩn đoán hình ảnh tổn thương da liễu"
 
+    # Save the upload first so the user's Message row can record image_url
+    # right away — previously the message was written before the image was
+    # saved, so nothing on the message ever pointed at the photo, and a page
+    # reload had no way to know one had been attached at all.
+    store = await get_store()
+    run_id = str(uuid.uuid4())
+    image_path, image_url = await save_upload(image, run_id)
+
     conversation: Conversation | None = None
     if conversation_id:
         try:
@@ -72,6 +80,8 @@ async def start_skin_diagnostic(
                 conversation_id=conversation.id,
                 role="user",
                 content=first_message,
+                message_type="skin_image",
+                image_url=image_url,
             )
         )
         conversation.updated_at = datetime.now(timezone.utc)
@@ -82,11 +92,10 @@ async def start_skin_diagnostic(
             db=db,
             user_id=current_user.id,
             first_message=first_message,
+            message_type="skin_image",
+            image_url=image_url,
         )
 
-    store = await get_store()
-    run_id = str(uuid.uuid4())
-    image_path, image_url = await save_upload(image, run_id)
     run = await store.create(
         run_id=run_id,
         user_id=str(current_user.id),

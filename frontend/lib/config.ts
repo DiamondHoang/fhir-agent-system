@@ -12,6 +12,12 @@ export const DOMAIN = {
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
+// Origin without the trailing "/api" — the skin-diagnostic image endpoint
+// returns paths that already include "/api/...", so building a fetchable
+// URL from it means stripping API_BASE's own "/api" suffix first instead of
+// concatenating (which would double it up).
+export const API_ORIGIN = API_BASE.replace(/\/api\/?$/, "");
+
 export interface GraphData {
   results: Record<string, unknown>[];
 }

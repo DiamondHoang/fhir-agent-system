@@ -328,6 +328,7 @@ from datetime import datetime, timezone
 
 from app.services.long_term_memory import save_conversation_memory
 from app.skin_diagnostic.session_store import get_store
+from app.skin_diagnostic.session_view import build_result
 
 # Step-by-step pipeline detail (differentials added, reasoning notes, etc.)
 # used to just go to stdout via print(); it's now routed through the normal
@@ -418,6 +419,13 @@ async def _save_diagnosis_message(state: dict, run) -> None:
                 conversation_id=conversation_uuid,
                 role="assistant",
                 content=_build_diagnosis_summary(state),
+                # Same shape the frontend already renders live during the
+                # run (see build_result / SkinDiagnosticResult) — saving it
+                # here too means a page reload gets back the formatted
+                # ranked-diagnosis card instead of only the plain-text
+                # summary above.
+                message_type="skin_result",
+                structured_data=build_result(state),
             )
             db.add(message)
 

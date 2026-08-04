@@ -1533,12 +1533,13 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { DOMAIN, API_BASE } from "@/lib/config";
+import { DOMAIN, API_BASE, API_ORIGIN } from "@/lib/config";
 import type { GraphData } from "@/lib/config";
 import {
   ApiError,
   clearAuth,
   deleteConversation,
+  fetchAuthenticatedImage,
   getAccessToken,
   getStoredUser,
   listConversations,
@@ -1719,13 +1720,23 @@ function isGraphData(value: unknown): value is GraphData {
 }
 
 function mapBackendMessage(message: ChatMessage): Message {
-  return {
+  const mapped: Message = {
     id: message.id,
     conversation_id: message.conversation_id,
     role: message.role,
     content: message.content,
     created_at: message.created_at,
   };
+  // Rebuild the structured dermatology result card from what the backend
+  // persisted, instead of leaving it as the plain-text summary in
+  // `content`. The image (imagePreview) is re-hydrated separately in
+  // loadConversationMessages, since fetching it needs an auth header and
+  // can't happen synchronously here.
+  if (message.message_type === "skin_result" && message.structured_data) {
+    mapped.type = "skin_result";
+    mapped.skinResult = message.structured_data as unknown as SkinDiagnosticResult;
+  }
+  return mapped;
 }
 
 function upsertConversation(items: Conversation[], conversation: Conversation): Conversation[] {
@@ -1742,6 +1753,16 @@ function TypingDots({ color = "gray.400" }: { color?: string }) {
       <span />
     </Box>
   );
+}
+
+/** First letter of the username (or first+last word), for the account
+ * avatar circle — mirrors how ChatGPT renders its bottom-left account chip. */
+function getInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function replaceMessage(messages: Message[], localId: string, message: ChatMessage): Message[] {
@@ -1936,6 +1957,25 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     try {
       const data = await listMessages(conversationId);
       setMessages(data.items.map(mapBackendMessage));
+
+      // Re-hydrate attached photos. The thumbnail shown while chatting is a
+      // local blob: URL that only lives for the current tab — after a
+      // reload we have to re-fetch the persisted file from the backend
+      // (auth-protected, so this can't just be an <img src=...>) and patch
+      // it back onto the matching message once it arrives.
+      data.items.forEach((item) => {
+        if (!item.image_url) return;
+        fetchAuthenticatedImage(`${API_ORIGIN}${item.image_url}`)
+          .then((blobUrl) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === item.id ? { ...m, imagePreview: blobUrl } : m))
+            );
+          })
+          .catch(() => {
+            // Image no longer available (deleted run, etc.) — leave the
+            // message without a thumbnail rather than blocking the rest.
+          });
+      });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         handleAuthFailure();
@@ -2550,8 +2590,12 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
               w="100%"
               size="sm"
               variant="outline"
-              colorPalette="blue"
               justifyContent="flex-start"
+              borderWidth="1.5px"
+              borderColor="gray.300"
+              color="gray.700"
+              bg="white"
+              _hover={{ borderColor: "#10a37f", color: "#10a37f", bg: "#10a37f0d" }}
               onClick={startNewConversation}
             >
               <Plus size={16} />
@@ -2611,13 +2655,24 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             )}
           </Flex>
           <Separator />
-          <HStack p={3} justify="space-between" bg="gray.100">
-            <Text fontSize="xs" fontWeight="medium" color="gray.700" truncate>
+          <HStack
+            p={2}
+            m={2}
+            gap={2}
+            borderRadius="lg"
+            bg="transparent"
+            _hover={{ bg: "gray.200" }}
+            cursor="pointer"
+            onClick={handleLogout}
+            title="Đăng xuất"
+          >
+            <Circle size="7" bg="#10a37f" color="white" fontSize="2xs" fontWeight="bold" flexShrink={0}>
+              {getInitials(user.username)}
+            </Circle>
+            <Text fontSize="sm" fontWeight="medium" color="gray.800" truncate flex={1}>
               {user.username}
             </Text>
-            <IconButton aria-label="Đăng xuất" size="xs" variant="ghost" color="gray.600" onClick={handleLogout}>
-              <LogOut size={14} />
-            </IconButton>
+            <LogOut size={14} color="#9ca3af" />
           </HStack>
         </Box>
       )}
@@ -2674,8 +2729,8 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                         shadow="sm"
                       >
                         {msg.imagePreview && (
-                          <Box w="120px" h="120px" borderRadius="md" overflow="hidden" mb={2} border="2px solid white">
-                            <img src={msg.imagePreview} alt="Tổn thương da" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <Box w="200px" maxW="100%" borderRadius="lg" overflow="hidden" mb={2} shadow="sm">
+                            <img src={msg.imagePreview} alt="Tổn thương da" style={{ width: "100%", height: "auto", display: "block", objectFit: "cover" }} />
                           </Box>
                         )}
                         <Text fontSize="sm" whiteSpace="pre-wrap">{msg.content}</Text>
@@ -2903,50 +2958,18 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                 </Box>
               ))}
 
-              {/* Running Status / Pipeline Progress Indicator */}
+              {/* Running Status / Typing Indicator — intentionally just the
+                  three dots, like ChatGPT/Claude's "thinking" state. No
+                  progress bar and no visible cancel affordance; internal
+                  pipeline detail (step names, % progress) still only goes to
+                  the backend logs. */}
               {loading && (
                 <Flex gap={3} align="flex-start" mb={2}>
                   <Circle size="8" bg="#10a37f" color="white" flexShrink={0} mt={1}>
                     <Bot size={16} />
                   </Circle>
                   <Box bg="gray.50" borderWidth="1px" borderColor="gray.200" px={4} py={3} borderRadius="xl" flex={1}>
-                    {activeSkinRunId && skinStatus ? (
-                      // Intentionally generic: earlier this showed the raw
-                      // pipeline step name (STEP_LABELS[skinStatus.current_step],
-                      // e.g. "Biện luận & tổng hợp chẩn đoán"). That's internal
-                      // pipeline detail — a clinician doesn't need a running
-                      // commentary of it, so it now only appears in the
-                      // backend logs. The progress bar still gives a sense of
-                      // how far along the analysis is.
-                      <VStack align="stretch" gap={2}>
-                        <HStack justify="space-between">
-                          <TypingDots color="blue.500" />
-                        </HStack>
-                        <Box h="1.5" bg="gray.200" borderRadius="full" overflow="hidden">
-                          <Box
-                            h="100%"
-                            bg="blue.500"
-                            width={`${Math.min((skinStatus.progress / 7) * 100, 100)}%`}
-                            transition="width 0.3s"
-                          />
-                        </Box>
-                      </VStack>
-                    ) : streamingToolCalls.length > 0 ? (
-                      // Same idea: don't stream the tool-by-tool timeline to
-                      // the user, just show that the assistant is working.
-                      <HStack gap={2}>
-                        <TypingDots />
-                        {elapsedSeconds > 3 && <Text fontSize="xs" color="gray.400">{elapsedSeconds}s</Text>}
-                      </HStack>
-                    ) : (
-                      <HStack gap={2}>
-                        <TypingDots color="blue.500" />
-                        {elapsedSeconds > 3 && <Text fontSize="xs" color="gray.400">{elapsedSeconds}s</Text>}
-                      </HStack>
-                    )}
-                    <Button size="xs" variant="ghost" mt={2} color="gray.400" onClick={cancelRequest}>
-                      Hủy bỏ
-                    </Button>
+                    <TypingDots color="blue.500" />
                   </Box>
                 </Flex>
               )}
@@ -2958,83 +2981,99 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
         {/* Input Bar */}
         <Box px={4} py={3} borderTop="1px solid" borderColor="gray.200" bg="white">
           <Box maxW="800px" mx="auto">
-            {/* Image Preview Thumbnail */}
-            {filePreview && (
-              <HStack gap={2} mb={2} p={2} bg="gray.50" borderRadius="md" borderWidth="1px" borderColor="blue.300">
-                <Box w="40px" h="40px" borderRadius="md" overflow="hidden" flexShrink={0} borderWidth="1px" borderColor="blue.500">
-                  <img src={filePreview} alt="Xem trước" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                </Box>
-                <Text fontSize="xs" color="gray.700" truncate flex={1}>
-                  {selectedFile?.name}
-                </Text>
-                <IconButton aria-label="Xóa ảnh" size="2xs" variant="ghost" onClick={clearSelectedFile}>
-                  <X size={14} />
-                </IconButton>
-              </HStack>
-            )}
-
-            {/* Main Input Container */}
-            <Flex
-              align="flex-end"
-              gap={2}
-              bg="gray.50"
+            {/* Main Input Container — ChatGPT-style single rounded card:
+                attached image sits inside the card, above the text row,
+                instead of as a separate element floating above it. */}
+            <Box
+              bg="white"
               borderWidth="1px"
               borderColor="gray.300"
-              borderRadius="2xl"
+              borderRadius="26px"
               px={3}
-              py={2}
+              pt={filePreview ? 3 : 2}
+              pb={2}
               shadow="sm"
-              _focusWithin={{ borderColor: "blue.500", bg: "white", shadow: "md" }}
+              _focusWithin={{ borderColor: "#10a37f", shadow: "md" }}
               transition="all 0.2s"
             >
-              {/* Image Upload Button */}
-              <IconButton
-                aria-label="Tải ảnh lên"
-                size="xs"
-                variant="ghost"
-                color={selectedFile ? "blue.600" : "gray.500"}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading}
-              >
-                <ImagePlus size={18} />
-              </IconButton>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
-                style={{ display: "none" }}
-              />
+              {/* Image Preview Chip — inside the input card, like ChatGPT */}
+              {filePreview && (
+                <Box mb={2} pl={1}>
+                  <Box position="relative" w="64px" h="64px" borderRadius="lg" overflow="hidden" borderWidth="1px" borderColor="gray.200" shadow="xs">
+                    <img src={filePreview} alt="Xem trước" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <IconButton
+                      aria-label="Xóa ảnh"
+                      size="2xs"
+                      borderRadius="full"
+                      bg="gray.800"
+                      color="white"
+                      _hover={{ bg: "gray.900" }}
+                      position="absolute"
+                      top="2px"
+                      right="2px"
+                      minW="18px"
+                      h="18px"
+                      onClick={clearSelectedFile}
+                    >
+                      <X size={10} />
+                    </IconButton>
+                  </Box>
+                </Box>
+              )}
 
-              {/* Textarea */}
-              <Textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Nhập tin nhắn..."
-                border="none"
-                _focus={{ boxShadow: "none" }}
-                resize="none"
-                rows={1}
-                fontSize="sm"
-                px={1}
-                py={1}
-                disabled={loading}
-                style={{ maxHeight: "160px" }}
-              />
+              <Flex align="flex-end" gap={2}>
+                {/* Image Upload Button */}
+                <IconButton
+                  aria-label="Tải ảnh lên"
+                  size="xs"
+                  variant="ghost"
+                  borderRadius="full"
+                  color={selectedFile ? "#10a37f" : "gray.500"}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading}
+                >
+                  <ImagePlus size={18} />
+                </IconButton>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
+                  style={{ display: "none" }}
+                />
 
-              {/* Send Button */}
-              <IconButton
-                aria-label="Gửi"
-                size="xs"
-                colorPalette="blue"
-                borderRadius="full"
-                onClick={() => sendMessage()}
-                disabled={(!input.trim() && !selectedFile) || loading}
-              >
-                {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={14} />}
-              </IconButton>
-            </Flex>
+                {/* Textarea */}
+                <Textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Nhập tin nhắn..."
+                  border="none"
+                  _focus={{ boxShadow: "none" }}
+                  resize="none"
+                  rows={1}
+                  fontSize="sm"
+                  px={1}
+                  py={1}
+                  disabled={loading}
+                  style={{ maxHeight: "160px" }}
+                />
+
+                {/* Send Button */}
+                <IconButton
+                  aria-label="Gửi"
+                  size="xs"
+                  bg="#10a37f"
+                  color="white"
+                  _hover={{ bg: "#0d8c6d" }}
+                  borderRadius="full"
+                  onClick={() => sendMessage()}
+                  disabled={(!input.trim() && !selectedFile) || loading}
+                >
+                  {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={14} />}
+                </IconButton>
+              </Flex>
+            </Box>
           </Box>
         </Box>
       </Flex>

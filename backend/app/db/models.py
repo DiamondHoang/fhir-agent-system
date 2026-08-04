@@ -12,7 +12,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -163,6 +163,28 @@ class Message(Base):
     content: Mapped[str] = mapped_column(
         Text,
         nullable=False,
+    )
+
+    # Everything below was added so a page reload no longer loses what a
+    # message actually looked like. Before this, only the plain-text
+    # `content` survived a reload — an attached photo and the structured
+    # dermatology result (ranked diagnoses, badges, etc.) only ever lived in
+    # the browser's in-memory React state, so refreshing silently dropped
+    # both and left a bare paragraph of text behind.
+    message_type: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        server_default="text",
+    )
+
+    image_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    structured_data: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

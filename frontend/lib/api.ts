@@ -34,6 +34,12 @@ export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   created_at: string;
+  // Persisted alongside the plain-text `content` so a reload can rebuild
+  // the rich view (attached photo, structured dermatology result card)
+  // instead of only having text to fall back to.
+  message_type?: string;
+  image_url?: string | null;
+  structured_data?: Record<string, unknown> | null;
 }
 
 export interface ConversationListResponse {
@@ -308,4 +314,26 @@ export async function submitSkinDiagnosticAnswers(
       body: JSON.stringify({ answers }),
     },
   );
+}
+
+/**
+ * Fetch an auth-protected image (e.g. a persisted skin-diagnostic upload)
+ * and turn it into a local blob URL. Needed because `<img src>` can't send
+ * an Authorization header itself, and the uploads endpoint requires one —
+ * without this, a saved photo simply 404s as "unauthenticated" after a
+ * reload even though the file is still there.
+ *
+ * `absoluteUrl` should already be a full URL (see API_ORIGIN in
+ * lib/config.ts) — this does not prefix it with API_BASE.
+ */
+export async function fetchAuthenticatedImage(absoluteUrl: string): Promise<string> {
+  const token = getAccessToken();
+  const response = await fetch(absoluteUrl, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, "Không thể tải ảnh đã lưu");
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 }
