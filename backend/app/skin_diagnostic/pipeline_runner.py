@@ -324,7 +324,9 @@ both rounds just call it with different inputs.
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
+from app.services.long_term_memory import save_conversation_memory
 from app.skin_diagnostic.session_store import get_store
 
 # Step-by-step pipeline detail (differentials added, reasoning notes, etc.)
@@ -337,6 +339,100 @@ logger = logging.getLogger(__name__)
 
 def _format_diff_list(diff_list: list) -> str:
     return "\n".join(f"  {i + 1}. {d}" for i, d in enumerate(diff_list)) if diff_list else "(Không có)"
+
+
+def _format_ranked_diagnoses(ranked: list) -> str:
+    lines = []
+    for i, item in enumerate(ranked or []):
+        if isinstance(item, dict):
+            disease = item.get("disease", "").strip()
+            prob = item.get("probability") or item.get("likelihood") or ""
+            label = f"{disease} ({prob})" if prob else disease
+        else:
+            label = str(item)
+        if label:
+            lines.append(f"{i + 1}. {label}")
+    return "\n".join(lines) if lines else "(Không có chẩn đoán)"
+
+
+def _build_diagnosis_summary(state: dict) -> str:
+    return (
+        "Kết quả chẩn đoán da liễu:\n"
+        f"{_format_ranked_diagnoses(state.get('ranked_diagnoses', []))}\n\n"
+        f"Biện luận: {state.get('reasoning', '(Không có)')}"
+    )
+
+
+async def _save_diagnosis_to_memory(session_id: str, anamnesis: str, state: dict, run) -> None:
+    """Persist the completed dermatology diagnosis into the shared (Mem0)
+    long-term memory so later chat turns can recall it — this is the same
+    memory store used by the regular chat flow (see app/services/chat.py),
+    but the skin-diagnostic pipeline runs outside that request/response
+    cycle, so it must save explicitly once a run finishes."""
+    if run is None or not run.user_id:
+        logger.warning(
+            "Skipping dermatology memory save: run %s has no user_id", session_id
+        )
+        return
+
+    complaint = anamnesis.strip() or "(Không có mô tả triệu chứng)"
+    user_message = f"Tôi vừa gửi ảnh tổn thương da để chẩn đoán. Mô tả: {complaint}"
+    assistant_message = _build_diagnosis_summary(state)
+
+    try:
+        await save_conversation_memory(
+            user_id=run.user_id,
+            session_id=session_id,
+            user_message=user_message,
+            assistant_message=assistant_message,
+        )
+    except Exception:
+        # Memory persistence must never fail the diagnostic run itself.
+        logger.exception(
+            "Failed to save dermatology diagnosis to shared memory for run %s",
+            session_id,
+        )
+
+
+async def _save_diagnosis_message(state: dict, run) -> None:
+    """Persist the diagnosis as an assistant Message in the linked
+    Conversation, so it shows up as a normal, titled chat exchange the user
+    can find later instead of only existing in the throwaway run store."""
+    if run is None or not run.conversation_id:
+        return
+
+    import uuid as uuid_module
+
+    from app.db.models import Conversation, Message
+    from app.db.session import AsyncSessionFactory
+
+    try:
+        conversation_uuid = uuid_module.UUID(run.conversation_id)
+    except (ValueError, AttributeError):
+        logger.warning("Invalid conversation_id on run: %r", run.conversation_id)
+        return
+
+    try:
+        async with AsyncSessionFactory() as db:
+            message = Message(
+                conversation_id=conversation_uuid,
+                role="assistant",
+                content=_build_diagnosis_summary(state),
+            )
+            db.add(message)
+
+            conversation = await db.get(Conversation, conversation_uuid)
+            if conversation is not None:
+                conversation.updated_at = datetime.now(timezone.utc)
+
+            await db.commit()
+    except Exception:
+        # A DB hiccup here must not fail the diagnostic run itself; the
+        # result is still visible to the user via the run store/UI.
+        logger.exception(
+            "Failed to save dermatology diagnosis message for conversation %s",
+            run.conversation_id,
+        )
 
 
 def _merge_new_differentials(state: dict, new_diffs: list, round_label: str) -> None:
@@ -600,6 +696,9 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
             state["reasoning"] = diag_output[:500]
 
         await store.update(session_id, status="completed", current_step="diagnostic_reasoning", state=state)
+        run = await store.get(session_id)
+        await _save_diagnosis_to_memory(session_id, anamnesis, state, run)
+        await _save_diagnosis_message(state, run)
 
     except Exception as e:
         await store.update(session_id, status="error", error=str(e))

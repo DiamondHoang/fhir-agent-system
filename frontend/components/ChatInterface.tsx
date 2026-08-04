@@ -1732,6 +1732,18 @@ function upsertConversation(items: Conversation[], conversation: Conversation): 
   return [conversation, ...items.filter((item) => item.id !== conversation.id)];
 }
 
+/** Three bouncing dots, like ChatGPT/Claude's "thinking" indicator — used
+ * instead of "Đang phân tích...", "Đang tra cứu..." style status text. */
+function TypingDots({ color = "gray.400" }: { color?: string }) {
+  return (
+    <Box as="span" className="typing-dots" color={color} lineHeight={0}>
+      <span />
+      <span />
+      <span />
+    </Box>
+  );
+}
+
 function replaceMessage(messages: Message[], localId: string, message: ChatMessage): Message[] {
   return messages.map((item) => (
     item.id === localId ? { ...mapBackendMessage(message), toolCalls: item.toolCalls } : item
@@ -2157,8 +2169,43 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
       setMessages((prev) => [...prev, localUserMsg]);
 
       try {
-        const startRes = await startSkinDiagnostic(file, messageText);
+        const startRes = await startSkinDiagnostic(file, messageText, activeConversationId);
         setActiveSkinRunId(startRes.run_id);
+
+        // The skin-diagnostic run now creates/reuses a real Conversation on
+        // the backend (see app/skin_diagnostic/router.py). Reflect that here
+        // so the sidebar shows a titled conversation instead of the request
+        // silently disappearing once the run finishes.
+        if (startRes.conversation_id) {
+          const wasNewConversation = !activeConversationId;
+          setActiveConversationId(startRes.conversation_id);
+          if (wasNewConversation) {
+            const conversation: Conversation = {
+              id: startRes.conversation_id,
+              user_id: user.id,
+              title: startRes.conversation_title || messageText || "Chẩn đoán da liễu",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            setConversations((prev) => upsertConversation(prev, conversation));
+          } else {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === startRes.conversation_id
+                  ? { ...c, updated_at: new Date().toISOString() }
+                  : c
+              )
+            );
+          }
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === localUserMsg.id
+                ? { ...m, conversation_id: startRes.conversation_id }
+                : m
+            )
+          );
+        }
+
         startSkinPolling(startRes.run_id);
       } catch (err) {
         setLoading(false);
@@ -2590,15 +2637,6 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
               <Heading size="sm">Hệ thống Trợ lý Bác sĩ</Heading>
             </HStack>
           </HStack>
-
-          <HStack gap={3}>
-            {(messages.length > 0 || activeConversationId) && (
-              <Button size="xs" variant="ghost" onClick={startNewConversation}>
-                <RotateCcw size={14} />
-                Làm mới
-              </Button>
-            )}
-          </HStack>
         </Flex>
 
         {error && (
@@ -2882,10 +2920,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                       // how far along the analysis is.
                       <VStack align="stretch" gap={2}>
                         <HStack justify="space-between">
-                          <Text fontSize="xs" fontWeight="medium" color="blue.600">
-                            Đang phân tích dữ liệu lâm sàng...
-                          </Text>
-                          <Spinner size="xs" color="blue.500" />
+                          <TypingDots color="blue.500" />
                         </HStack>
                         <Box h="1.5" bg="gray.200" borderRadius="full" overflow="hidden">
                           <Box
@@ -2900,14 +2935,12 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                       // Same idea: don't stream the tool-by-tool timeline to
                       // the user, just show that the assistant is working.
                       <HStack gap={2}>
-                        <Spinner size="xs" />
-                        <Text fontSize="xs" color="gray.600">Đang tra cứu dữ liệu hồ sơ...</Text>
+                        <TypingDots />
                         {elapsedSeconds > 3 && <Text fontSize="xs" color="gray.400">{elapsedSeconds}s</Text>}
                       </HStack>
                     ) : (
                       <HStack gap={2}>
-                        <Spinner size="xs" color="blue.500" />
-                        <Text fontSize="xs" color="gray.500">Đang suy luận phản hồi y khoa...</Text>
+                        <TypingDots color="blue.500" />
                         {elapsedSeconds > 3 && <Text fontSize="xs" color="gray.400">{elapsedSeconds}s</Text>}
                       </HStack>
                     )}

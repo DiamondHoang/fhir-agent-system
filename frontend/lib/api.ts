@@ -89,6 +89,8 @@ export interface SkinDiagnosticStartResponse {
   run_id: string;
   status: string;
   current_step: string;
+  conversation_id: string;
+  conversation_title: string;
 }
 
 export class ApiError extends Error {
@@ -271,10 +273,14 @@ export async function openMessageStream(
 export async function startSkinDiagnostic(
   image: File,
   anamnesis: string,
+  conversationId?: string | null,
 ): Promise<SkinDiagnosticStartResponse> {
   const body = new FormData();
   body.append("image", image);
   body.append("anamnesis", anamnesis);
+  if (conversationId) {
+    body.append("conversation_id", conversationId);
+  }
 
   const response = await apiFetch("/skin-diagnostics/start", {
     method: "POST",

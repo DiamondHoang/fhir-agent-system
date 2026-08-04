@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import uuid4
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.db import session as db_session_module
 from app.db.models import User
 from app.dependencies import auth as auth_dep
 from app.skin_diagnostic.answer_validation import normalize_yes_no
@@ -37,6 +38,31 @@ def clear_skin_store():
     _store._runs.clear()
 
 
+def _build_mock_db_session() -> MagicMock:
+    """Minimal AsyncSession stand-in so /start's conversation-creation
+    (used to link the diagnostic run to a titled conversation) doesn't need
+    a real Postgres connection in tests. Mirrors the pattern already used in
+    tests/test_conversations.py."""
+    mock_session = MagicMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_session.rollback = AsyncMock()
+
+    async def _refresh(obj):
+        if getattr(obj, "id", None) is None:
+            obj.id = uuid4()
+        if hasattr(obj, "created_at") and getattr(obj, "created_at", None) is None:
+            obj.created_at = datetime.now(timezone.utc)
+        if hasattr(obj, "updated_at") and getattr(obj, "updated_at", None) is None:
+            obj.updated_at = datetime.now(timezone.utc)
+
+    mock_session.refresh = AsyncMock(side_effect=_refresh)
+    return mock_session
+
+
 def _make_app(user: User | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(skin_router, prefix="/api")
@@ -44,7 +70,11 @@ def _make_app(user: User | None = None) -> FastAPI:
     async def _current_user():
         return user or _make_user()
 
+    async def _override_get_db():
+        yield _build_mock_db_session()
+
     app.dependency_overrides[auth_dep.get_current_user] = _current_user
+    app.dependency_overrides[db_session_module.get_db] = _override_get_db
     return app
 
 

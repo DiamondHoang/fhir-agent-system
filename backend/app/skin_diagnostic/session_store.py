@@ -189,6 +189,10 @@ class SkinDiagnosticRun:
     image_path: str = ""
     image_url: str = ""
     anamnesis: str = ""
+    # Links this run to a real Conversation/Message row in Postgres so the
+    # diagnostic exchange shows up as a titled conversation in the sidebar
+    # instead of only living in this in-memory/JSON-snapshot run store.
+    conversation_id: str = ""
     error: str | None = None
     step_history: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -243,6 +247,7 @@ class SkinDiagnosticStore:
         image_path: str,
         image_url: str,
         anamnesis: str,
+        conversation_id: str = "",
         run_id: str | None = None,
     ) -> SkinDiagnosticRun:
         async with self._lock:
@@ -252,6 +257,7 @@ class SkinDiagnosticStore:
                 image_path=image_path,
                 image_url=image_url,
                 anamnesis=anamnesis,
+                conversation_id=conversation_id,
             )
             self._runs[run.id] = run
             self._persist(run)

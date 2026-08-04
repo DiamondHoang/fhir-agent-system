@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import User
+from app.api.conversations import create_conversation_with_user_message
+from app.db.models import Conversation, Message, User
+from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.skin_diagnostic.answer_validation import normalize_yes_no
 from app.skin_diagnostic.pipeline_runner import resume_pipeline, run_pipeline_background
@@ -32,8 +37,53 @@ router = APIRouter(prefix="/skin-diagnostics", tags=["skin diagnostics"])
 async def start_skin_diagnostic(
     image: UploadFile = File(...),
     anamnesis: str = Form(""),
+    conversation_id: str | None = Form(None),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
+    # A photo-based diagnosis request previously never touched the
+    # conversations/messages tables at all — it only lived in this module's
+    # own in-memory session store. That meant it never showed up as a named
+    # conversation in the sidebar and nothing recorded what the user asked.
+    # Reuse the currently open conversation if the frontend has one (same
+    # behaviour as sending a normal text message into an open chat);
+    # otherwise create a new Conversation, titled from what the user typed,
+    # exactly like the regular chat flow does for the first message.
+    first_message = anamnesis.strip() or "Yêu cầu chẩn đoán hình ảnh tổn thương da liễu"
+
+    conversation: Conversation | None = None
+    if conversation_id:
+        try:
+            candidate_uuid = uuid.UUID(conversation_id)
+        except ValueError:
+            candidate_uuid = None
+        if candidate_uuid is not None:
+            result = await db.execute(
+                select(Conversation).where(
+                    Conversation.id == candidate_uuid,
+                    Conversation.user_id == current_user.id,
+                )
+            )
+            conversation = result.scalar_one_or_none()
+
+    if conversation is not None:
+        db.add(
+            Message(
+                conversation_id=conversation.id,
+                role="user",
+                content=first_message,
+            )
+        )
+        conversation.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(conversation)
+    else:
+        conversation, _user_message = await create_conversation_with_user_message(
+            db=db,
+            user_id=current_user.id,
+            first_message=first_message,
+        )
+
     store = await get_store()
     run_id = str(uuid.uuid4())
     image_path, image_url = await save_upload(image, run_id)
@@ -43,12 +93,15 @@ async def start_skin_diagnostic(
         image_path=image_path,
         image_url=image_url,
         anamnesis=anamnesis,
+        conversation_id=str(conversation.id),
     )
     asyncio.create_task(run_pipeline_background(run.id, image_path, anamnesis))
     return SkinDiagnosticStartResponse(
         run_id=run.id,
         status="running",
         current_step="visual_extract",
+        conversation_id=str(conversation.id),
+        conversation_title=conversation.title or first_message,
     )
 
 

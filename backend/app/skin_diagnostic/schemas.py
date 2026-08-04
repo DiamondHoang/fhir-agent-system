@@ -35,6 +35,8 @@ class SkinDiagnosticStartResponse(BaseModel):
     run_id: str
     status: str
     current_step: str
+    conversation_id: str
+    conversation_title: str
 
 
 class SkinDiagnosticAnswersResponse(BaseModel):
