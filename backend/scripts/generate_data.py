@@ -1,6 +1,4 @@
-﻿"""Generate sample data for Healthcare context graph."""
-
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import json
@@ -190,7 +188,6 @@ async def load_decision_traces(data: dict):
     print(f"  Created {len(traces)} DecisionTrace nodes with steps")
 
 async def main():
-    print("Seeding Healthcare context graph...")
 
     fixture_path = DATA_DIR / "fixtures.json"
     if not fixture_path.exists():
@@ -231,7 +228,7 @@ async def main():
     await load_decision_traces(data)
 
     await close_neo4j()
-    print("\nDone! Your Healthcare context graph is ready.")
+    print("\nDone! Your Healthcare AI Agent System is ready.")
 
 
 if __name__ == "__main__":

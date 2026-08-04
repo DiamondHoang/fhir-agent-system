@@ -370,25 +370,6 @@ decision_traces:
         action: "Find nearby facilities with available capacity and matching specialties"
     outcome_template: "Utilization: {{utilization_pct}}%. Actions: {{actions}}. Transfers recommended: {{transfer_count}}"
 
-demo_scenarios:
-  - name: Patient Lookup
-    prompts:
-      - "Show me all patients with a chronic diagnosis"
-      - "What medications are currently prescribed to patients in the cardiology department?"
-      - "Find all recent patient encounters in the last 6 months"
-
-  - name: Clinical Decision Support
-    prompts:
-      - "Are there any potential drug interactions in current prescriptions?"
-      - "What treatments have been most effective for patients with heart failure?"
-      - "Show me the most recent decision traces for treatment plans"
-
-  - name: Provider Network
-    prompts:
-      - "Which providers are affiliated with the largest hospital in the network?"
-      - "Show the referral patterns between primary care and specialists"
-      - "Which providers have the most patient encounters this quarter?"
-
 agent_tools:
   - name: search_patient
     description: Search for patients by name or ID

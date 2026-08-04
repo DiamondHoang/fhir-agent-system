@@ -32,6 +32,10 @@ if (require.main === module) {
     .then(port => {
       console.log(`Server running on port ${port}`);
       neo4jController.verifyConnection();
+      setTimeout(() => {
+        neo4jController.resumePendingImports()
+          .catch(error => console.error('Could not resume pending FHIR imports:', error));
+      }, 3000);
     })
     .catch(error => {
       console.log(error);

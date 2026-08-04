@@ -1,6 +1,4 @@
-﻿"""Tests for Healthcare Context Graph API."""
-
-import os
+﻿import os
 import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
@@ -37,15 +35,6 @@ def test_health():
     assert "postgres" in data
     assert "pgvector" in data
     assert "memory" in data
-
-
-def test_scenarios():
-    response = client.get("/api/scenarios")
-    assert response.status_code == 200
-    data = response.json()
-    assert "domain" in data
-    assert "scenarios" in data
-    assert isinstance(data["scenarios"], list)
 
 
 def test_health_with_pgvector_status():

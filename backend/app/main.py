@@ -1,6 +1,4 @@
-﻿"""Healthcare Context Graph â€” FastAPI Application."""
-
-import asyncio
+﻿import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -106,7 +104,7 @@ def get_memory_status() -> bool:
 
 
 app = FastAPI(
-    title="Healthcare Context Graph",
+    title="Healthcare AI Agent System",
     description="Patient care, clinical encounters, diagnoses, treatments, and provider networks",
     version="0.1.0",
     lifespan=lifespan,

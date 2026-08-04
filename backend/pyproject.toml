@@ -1,7 +1,7 @@
 [project]
 name = "fhir-agent-backend"
 version = "0.1.0"
-description = "Healthcare Context Graph Backend"
+description = "Healthcare AI Agent System Backend"
 requires-python = ">=3.10, <3.14"
 dependencies = [
     "fastapi>=0.115",

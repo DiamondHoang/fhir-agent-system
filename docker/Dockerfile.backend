@@ -2,16 +2,23 @@ FROM python:3.12-slim AS base
 
 WORKDIR /app
 
+# Keep the environment outside /app: docker-compose bind-mounts the source at
+# /app in development, which would otherwise hide the installed dependencies.
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files first for better layer caching
-COPY pyproject.toml ./
-RUN uv sync --no-dev --no-install-project
+# Copy both dependency files so the exact, compatible OpenAI SDK version is
+# installed rather than resolving whatever happens to be available at build time.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project
 
 # Copy application code
 COPY . .
 
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Keep the schema current before accepting requests. `upgrade head` is
+# idempotent, so it is safe on subsequent container restarts.
+CMD ["sh", "-c", "uv run --no-sync alembic upgrade head && exec uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]

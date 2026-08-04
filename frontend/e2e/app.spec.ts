@@ -27,7 +27,7 @@ async function authenticatePage(page: Page, request: APIRequestContext, testTitl
   });
 }
 
-test.describe("Healthcare Context Graph", () => {
+test.describe("Healthcare AI Agent System", () => {
   test.beforeEach(async ({ page, request }, testInfo) => {
     await authenticatePage(page, request, testInfo.title);
     await page.goto(BASE_URL);
@@ -46,16 +46,6 @@ test.describe("Healthcare Context Graph", () => {
 
     // Chat input
     await expect(page.getByPlaceholder(/ask about/i)).toBeVisible();
-  });
-
-  test("demo scenario badges are visible", async ({ page }) => {
-    // Should show demo scenario section
-    await expect(page.getByText(/try these/i)).toBeVisible();
-
-    // Should have clickable badges
-    const badges = page.locator("[role='group'] span[data-scope='badge'], .chakra-badge").filter({ hasText: /.{10,}/ });
-    const count = await badges.count();
-    expect(count).toBeGreaterThan(0);
   });
 
   // --------------------------------------------------------------------------
@@ -176,28 +166,6 @@ test.describe("Healthcare Context Graph", () => {
   });
 
   // --------------------------------------------------------------------------
-  // Demo badge click flow
-  // --------------------------------------------------------------------------
-
-  test("clicking a demo badge sends the prompt", async ({ page }) => {
-    test.setTimeout(CHAT_TIMEOUT);
-
-    // Find and click the first demo badge
-    const badge = page.locator(".chakra-badge[title]").first();
-    const promptText = await badge.getAttribute("title");
-    expect(promptText).toBeTruthy();
-
-    await badge.click();
-
-    // Should show user message with the badge prompt
-    await expect(page.getByText(promptText!).first()).toBeVisible({ timeout: 5_000 });
-
-    // Should eventually get an assistant response
-    const assistantResponse = page.locator(".markdown-content").last();
-    await expect(assistantResponse).toBeVisible({ timeout: CHAT_TIMEOUT });
-  });
-
-  // --------------------------------------------------------------------------
   // Tool call visualization
   // --------------------------------------------------------------------------
 
@@ -232,8 +200,7 @@ test.describe("Healthcare Context Graph", () => {
     // Click "New" button
     await page.getByRole("button", { name: /new/i }).click();
 
-    // Demo scenarios should be visible again
-    await expect(page.getByText(/try these/i)).toBeVisible();
+    await expect(input).toHaveValue("");
   });
 
   // --------------------------------------------------------------------------

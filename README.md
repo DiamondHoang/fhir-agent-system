@@ -1,4 +1,4 @@
-# FHIR Agent System — Unified Healthcare Context Graph & Clinical AI Agent
+# Healthcare AI Agent System
 
 Hệ thống thống nhất kết hợp **CyFHIR ETL Engine** (Chuyển đổi dữ liệu chuẩn HL7 FHIR sang Neo4j Graph Database) và **FHIR Clinical Agent Backend/Frontend** (Trí tuệ nhân tạo truy vấn tri thức y khoa đa tầng & hỗ trợ chẩn đoán lâm sàng).
 

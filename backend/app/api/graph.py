@@ -1,6 +1,4 @@
-﻿"""API routes for Healthcare Context Graph."""
-
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import json
@@ -322,8 +320,6 @@ async def get_document(title: str):
     if not results:
         raise HTTPException(status_code=404, detail="Document not found")
     return results[0]
-
-
 @router.get("/traces")
 async def list_traces():
     """List decision traces with their full reasoning steps."""
@@ -367,37 +363,3 @@ async def get_entity_detail(name: str):
     if not results:
         raise HTTPException(status_code=404, detail="Document not found")
     return results[0]
-
-
-@router.get("/scenarios")
-async def scenarios():
-    """Get demo scenarios for the frontend."""
-    return {
-        "domain": "Healthcare",
-        "scenarios": [
-            {
-                "name": "Patient Lookup",
-                "prompts": [
-                    "Show me all patients with a chronic diagnosis",
-                    "What medications are currently prescribed to patients in the cardiology department?",
-                    "Find all recent patient encounters in the last 6 months",
-                ],
-            },
-            {
-                "name": "Clinical Decision Support",
-                "prompts": [
-                    "Are there any potential drug interactions in current prescriptions?",
-                    "What treatments have been most effective for patients with heart failure?",
-                    "Show me the most recent decision traces for treatment plans",
-                ],
-            },
-            {
-                "name": "Provider Network",
-                "prompts": [
-                    "Which providers are affiliated with the largest hospital in the network?",
-                    "Show the referral patterns between primary care and specialists",
-                    "Which providers have the most patient encounters this quarter?",
-                ],
-            },
-        ],
-    }

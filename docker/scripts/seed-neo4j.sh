@@ -17,13 +17,13 @@ echo "CyFHIR Express is UP!"
 
 # Mode 1: Load all resources from upstream FHIR Server if FHIR_SERVER_URL is defined
 if [ -n "$FHIR_SERVER_URL" ]; then
-  echo "Found FHIR_SERVER_URL=${FHIR_SERVER_URL}. Triggering /api/LoadAllResources..."
-  RESPONSE=$(curl -s -X POST "${EXPRESS_URL}/api/LoadAllResources" \
+  echo "Found FHIR_SERVER_URL=${FHIR_SERVER_URL}. Starting background import..."
+  RESPONSE=$(curl -fsS -X POST "${EXPRESS_URL}/api/LoadAllResources" \
     -H "Content-Type: application/json" \
     -d "{\"fhirBaseUrl\":\"${FHIR_SERVER_URL}\"}")
   
   echo "Response from LoadAllResources: ${RESPONSE}"
-  echo "=== Auto-Seeding from FHIR Server Completed! ==="
+  echo "=== Background FHIR import was started; CyFHIR Express will continue it independently. ==="
 # Mode 2: Fallback to local Synthea JSON bundles if available
 elif [ -d "$BUNDLES_DIR" ]; then
   echo "Loading local Synthea bundles from ${BUNDLES_DIR}..."

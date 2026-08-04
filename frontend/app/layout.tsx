@@ -3,7 +3,7 @@ import { Provider } from "@/components/Provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Healthcare Context Graph",
+  title: "Healthcare AI Agent System",
   description: "Patient care, clinical encounters, diagnoses, treatments, and provider networks",
 };
 
