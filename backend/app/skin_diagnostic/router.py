@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,21 +17,91 @@ from app.api.conversations import create_conversation_with_user_message
 from app.db.models import Conversation, Message, User
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
+from app.skin_diagnostic import fhir_images
 from app.skin_diagnostic.answer_validation import normalize_yes_no
+from app.skin_diagnostic.fhir_images import FhirImageError
 from app.skin_diagnostic.pipeline_runner import resume_pipeline, run_pipeline_background
 from app.skin_diagnostic.schemas import (
     BulkAnswerRequest,
+    PatientCreateRequest,
+    PatientCreateResponse,
     SkinDiagnosticAnswersResponse,
     SkinDiagnosticDetailResponse,
     SkinDiagnosticStartResponse,
     SkinDiagnosticStatusResponse,
+    SkinImageResult,
+    SkinImageSearchResponse,
 )
 from app.skin_diagnostic.session_store import get_store
 from app.skin_diagnostic.session_view import build_result, get_pending_questions, get_step_progress
 from app.skin_diagnostic.uploads import UPLOADS_DIR, save_upload
 
+_CONTENT_TYPE_BY_EXT = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+
 
 router = APIRouter(prefix="/skin-diagnostics", tags=["skin diagnostics"])
+
+
+@router.post("/patients", response_model=PatientCreateResponse)
+async def create_fhir_patient(
+    request: PatientCreateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Create a minimal Patient on the live FHIR server for the "new
+    patient" popup shown right after an image is selected. The frontend
+    holds the returned patient_id in memory and sends it back on /start.
+    """
+    try:
+        result = await fhir_images.create_patient(
+            request.name, request.gender, request.birth_year
+        )
+    except FhirImageError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return PatientCreateResponse(**result)
+
+
+@router.get("/fhir-images", response_model=SkinImageSearchResponse)
+async def search_fhir_skin_images(
+    patient_id: str | None = None,
+    patient_name: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    count: int = 20,
+    current_user: User = Depends(get_current_user),
+):
+    """Look up skin photos stored on the FHIR server (used by the chat
+    agent's search_skin_images tool and by any direct-query UI)."""
+    try:
+        results = await fhir_images.search_skin_images(
+            patient_id=patient_id,
+            patient_name=patient_name,
+            date_from=date_from,
+            date_to=date_to,
+            count=count,
+        )
+    except FhirImageError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return SkinImageSearchResponse(results=[SkinImageResult(**r) for r in results])
+
+
+@router.get("/fhir-image/{binary_id}")
+async def get_fhir_skin_image(
+    binary_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Proxy raw photo bytes from the FHIR server's Binary resource."""
+    try:
+        raw_bytes, content_type = await fhir_images.fetch_binary(binary_id)
+    except FhirImageError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    from fastapi.responses import Response
+
+    return Response(content=raw_bytes, media_type=content_type)
 
 
 @router.post("/start", response_model=SkinDiagnosticStartResponse)
@@ -38,6 +109,7 @@ async def start_skin_diagnostic(
     image: UploadFile = File(...),
     anamnesis: str = Form(""),
     conversation_id: str | None = Form(None),
+    fhir_patient_id: str | None = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -58,6 +130,29 @@ async def start_skin_diagnostic(
     store = await get_store()
     run_id = str(uuid.uuid4())
     image_path, image_url = await save_upload(image, run_id)
+
+    # Push the same photo to the live FHIR server (Binary + ImagingStudy) if
+    # a patient was created via the "new patient" popup before this call.
+    # Best-effort: a FHIR outage should not block the local diagnostic run
+    # the doctor is already looking at, so failures are logged, not raised.
+    fhir_study_id = ""
+    fhir_binary_id = ""
+    if fhir_patient_id:
+        try:
+            content_type = _CONTENT_TYPE_BY_EXT.get(
+                Path(image_path).suffix.lower(), "image/jpeg"
+            )
+            raw_bytes = Path(image_path).read_bytes()
+            fhir_result = await fhir_images.save_skin_image(
+                fhir_patient_id, raw_bytes, content_type
+            )
+            fhir_study_id = fhir_result["study_id"]
+            fhir_binary_id = fhir_result["binary_id"]
+        except FhirImageError:
+            logging.getLogger(__name__).exception(
+                "FHIR image save failed for run %s (patient %s) — continuing without it",
+                run_id, fhir_patient_id,
+            )
 
     conversation: Conversation | None = None
     if conversation_id:
@@ -85,6 +180,8 @@ async def start_skin_diagnostic(
             )
         )
         conversation.updated_at = datetime.now(timezone.utc)
+        if fhir_patient_id:
+            conversation.fhir_patient_id = fhir_patient_id
         await db.commit()
         await db.refresh(conversation)
     else:
@@ -95,6 +192,10 @@ async def start_skin_diagnostic(
             message_type="skin_image",
             image_url=image_url,
         )
+        if fhir_patient_id:
+            conversation.fhir_patient_id = fhir_patient_id
+            await db.commit()
+            await db.refresh(conversation)
 
     run = await store.create(
         run_id=run_id,
@@ -103,7 +204,23 @@ async def start_skin_diagnostic(
         image_url=image_url,
         anamnesis=anamnesis,
         conversation_id=str(conversation.id),
+        fhir_patient_id=fhir_patient_id or "",
     )
+    if fhir_study_id:
+        await store.update(run_id, fhir_study_id=fhir_study_id, fhir_binary_id=fhir_binary_id)
+
+    # No symptoms typed -> the doctor just wants the photo saved, not a
+    # diagnosis. Skip the (slow, LLM-heavy) pipeline entirely.
+    if not anamnesis.strip():
+        await store.update(run_id, status="saved", current_step="saved")
+        return SkinDiagnosticStartResponse(
+            run_id=run.id,
+            status="saved",
+            current_step="saved",
+            conversation_id=str(conversation.id),
+            conversation_title=conversation.title or first_message,
+        )
+
     asyncio.create_task(run_pipeline_background(run.id, image_path, anamnesis))
     return SkinDiagnosticStartResponse(
         run_id=run.id,

@@ -1781,6 +1781,178 @@ async def diagnose_skin_condition(
     return model_content
 
 
+@agent.tool
+async def search_skin_images(
+    ctx: RunContext[AgentDeps],
+    patient_name: Annotated[
+        str,
+        Field(description="Patient name (or fragment) to search, e.g. 'Kim Cương', 'Nam Vũ'. Empty string if searching by patient_id instead, or listing recent photos across all patients."),
+    ],
+    patient_id: Annotated[
+        str,
+        Field(description="FHIR Patient id if already known. Empty string if searching by patient_name instead."),
+    ] = "",
+    date_from: Annotated[
+        str,
+        Field(description="Only photos saved on/after this date, format YYYY-MM-DD. Empty string for no lower bound."),
+    ] = "",
+    date_to: Annotated[
+        str,
+        Field(description="Only photos saved on/before this date, format YYYY-MM-DD. Empty string for no upper bound."),
+    ] = "",
+    count: Annotated[int, Field(description="Max number of photos to return, most recent first.")] = 10,
+) -> str:
+    """
+    Look up dermatology photos previously saved on the live FHIR server
+    (Patient + ImagingStudy resources) — a separate store from the FHIR
+    graph used by search_patient/search_resource above, and separate from
+    the current chat user's own in-progress diagnostic run.
+
+    Use when:
+    - The user asks to see/retrieve past skin photos for a named patient
+      ("cho tôi ảnh da của bệnh nhân Nam Vũ", "ảnh chụp tuần trước của bệnh
+      nhân X").
+    - You need a patient's most recent photo before calling
+      start_diagnosis_from_patient_image.
+
+    Do not use when:
+    - The user means their own just-uploaded photo in this chat; use
+      diagnose_skin_condition instead.
+
+    Returns:
+        str: JSON payload with a list of {study_id, patient_id,
+        patient_name, binary_id, last_updated, view_url}. last_updated is
+        the FHIR server's own save timestamp. Empty list if no patient or
+        no photo matched.
+    """
+    from app.skin_diagnostic import fhir_images
+    from app.skin_diagnostic.fhir_images import FhirImageError
+
+    logger.info(
+        "TOOL START | tool=search_skin_images | patient_name=%r patient_id=%r date_from=%r date_to=%r",
+        patient_name, patient_id, date_from, date_to,
+    )
+    try:
+        results = await fhir_images.search_skin_images(
+            patient_id=patient_id or None,
+            patient_name=patient_name or None,
+            date_from=date_from or None,
+            date_to=date_to or None,
+            count=count,
+        )
+        model_content = _json_response(status="ok", data=results, count=len(results))
+    except FhirImageError as exc:
+        model_content = _json_response(status="error", data=[], message=str(exc))
+    _record_tool_result_chars(len(model_content))
+    logger.info("TOOL END | tool=search_skin_images | chars=%s", len(model_content))
+    return model_content
+
+
+@agent.tool
+async def start_diagnosis_from_patient_image(
+    ctx: RunContext[AgentDeps],
+    patient_name: Annotated[
+        str,
+        Field(description="Name (or fragment) of the patient whose most recent skin photo should be diagnosed, e.g. 'Nam Vũ'."),
+    ],
+    symptom_text: Annotated[
+        str,
+        Field(description="The symptom/complaint described for this patient, e.g. 'ngứa dữ dội 3 ngày nay'."),
+    ],
+) -> str:
+    """
+    Start the dermatology diagnostic pipeline on a patient's most recent
+    saved FHIR photo, combined with a described symptom — for requests like
+    "lấy ảnh da của bệnh nhân Nam Vũ, bệnh nhân thấy ngứa dữ dội, hãy chẩn
+    đoán bệnh" in one go.
+
+    Use when:
+    - The user names a patient (not "I"/the current chat user) AND
+      describes a symptom AND asks for a diagnosis, all in one request.
+
+    Do not use when:
+    - No photo exists yet for that patient (search_skin_images returns
+      empty) — tell the user instead of calling this.
+    - The user means their own uploaded photo in this chat; use
+      diagnose_skin_condition instead.
+
+    Behavior:
+    - Looks up the patient's single most recent photo via the same lookup
+      as search_skin_images, downloads it, and kicks off the same
+      multi-step vision + clinical-interview pipeline used for a live photo
+      upload. This takes time and may pause for clinical Q&A.
+
+    Returns:
+        str: JSON payload. status "no_patient" (no matching patient),
+        "no_photo" (patient found but no photo on file — tell the user to
+        upload one), or "started" (run_id given — call
+        diagnose_skin_condition afterward, or later, to check progress/get
+        the result; do not fabricate a result before that).
+    """
+    import tempfile
+    import uuid as _uuid_mod
+    from pathlib import Path as _Path
+
+    from app.skin_diagnostic import fhir_images
+    from app.skin_diagnostic.fhir_images import FhirImageError
+    from app.skin_diagnostic.pipeline_runner import run_pipeline_background
+    from app.skin_diagnostic.session_store import get_store
+    from app.skin_diagnostic.uploads import UPLOADS_DIR
+
+    logger.info(
+        "TOOL START | tool=start_diagnosis_from_patient_image | patient_name=%r",
+        patient_name,
+    )
+    try:
+        matches = await fhir_images.search_skin_images(patient_name=patient_name, count=1)
+    except FhirImageError as exc:
+        model_content = _json_response(status="error", data={}, message=str(exc))
+        _record_tool_result_chars(len(model_content))
+        return model_content
+
+    if not matches:
+        payload = {"status": "no_photo", "message": f"No FHIR photo found for patient matching '{patient_name}'."}
+        model_content = _json_response(status="ok", data=payload)
+        _record_tool_result_chars(len(model_content))
+        return model_content
+
+    match = matches[0]
+    binary_id = match.get("binary_id")
+    if not binary_id:
+        payload = {"status": "no_photo", "message": "Patient found but the stored study has no photo."}
+        model_content = _json_response(status="ok", data=payload)
+        _record_tool_result_chars(len(model_content))
+        return model_content
+
+    raw_bytes, content_type = await fhir_images.fetch_binary(binary_id)
+    ext = {"image/png": ".png", "image/webp": ".webp"}.get(content_type, ".jpg")
+    run_id = _uuid_mod.uuid4().hex
+    image_path = str(UPLOADS_DIR / f"{run_id}{ext}")
+    _Path(image_path).write_bytes(raw_bytes)
+
+    store = await get_store()
+    run = await store.create(
+        run_id=run_id,
+        user_id=ctx.deps.user_id,
+        image_path=image_path,
+        image_url=f"/api/skin-diagnostics/uploads/{run_id}{ext}",
+        anamnesis=symptom_text,
+        fhir_patient_id=match.get("patient_id") or "",
+    )
+    asyncio.create_task(run_pipeline_background(run.id, image_path, symptom_text))
+
+    payload = {
+        "status": "started",
+        "run_id": run.id,
+        "patient_name": match.get("patient_name") or patient_name,
+        "message": "Diagnostic pipeline started on the patient's most recent photo. Check back with diagnose_skin_condition for progress/result.",
+    }
+    model_content = _json_response(status="ok", data=payload)
+    _record_tool_result_chars(len(model_content))
+    logger.info("TOOL END | tool=start_diagnosis_from_patient_image | run_id=%s", run.id)
+    return model_content
+
+
 # ---------------------------------------------------------------------------
 # Message handling
 # ---------------------------------------------------------------------------

@@ -5,6 +5,30 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class PatientCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    gender: str | None = Field(default=None, pattern="^(male|female|other|unknown)$")
+    birth_year: str | None = Field(default=None, min_length=4, max_length=4)
+
+
+class PatientCreateResponse(BaseModel):
+    patient_id: str
+    name: str
+
+
+class SkinImageResult(BaseModel):
+    study_id: str
+    patient_id: str | None = None
+    patient_name: str | None = None
+    binary_id: str | None = None
+    last_updated: str = ""
+    view_url: str | None = None
+
+
+class SkinImageSearchResponse(BaseModel):
+    results: list[SkinImageResult] = Field(default_factory=list)
+
+
 class AnswerItem(BaseModel):
     question_num: int | None = None
     answer: str = Field(min_length=1, max_length=100)
@@ -64,4 +88,3 @@ class SkinDiagnosticDetailResponse(BaseModel):
     pending_questions: list[PendingQuestion] | None = None
     result: SkinDiagnosticResult | None = None
     error: str | None = None
-

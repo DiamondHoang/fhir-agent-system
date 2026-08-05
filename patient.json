@@ -1,0 +1,11 @@
+{
+  "resourceType": "Patient",
+  "name": [
+    {
+      "use": "anonymous",
+      "text": "Test Kim Cuong"
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1990"
+}

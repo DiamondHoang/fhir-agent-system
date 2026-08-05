@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     skin_kb_min_score: float = 0.6
     skin_session_ttl_hours: int = 24
 
+    # FHIR image store — live HAPI FHIR server for skin-lesion photos
+    # (Patient / Binary / ImagingStudy). Separate from the Neo4j "FHIR graph"
+    # above, which only holds ingested clinical-knowledge data, not photos.
+    fhir_image_base_url: str = "http://172.16.12.230:8012/fhir"
+    fhir_image_timeout: int = 20
+
     model_config = {
         "env_file": "../.env",
         "env_file_encoding": "utf-8",

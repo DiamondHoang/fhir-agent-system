@@ -37,6 +37,12 @@ class SkinDiagnosticRun:
     image_path: str = ""
     image_url: str = ""
     anamnesis: str = ""
+    # Set when this run's photo was also pushed to the live FHIR server
+    # (app/skin_diagnostic/fhir_images.py). Empty when no patient was
+    # selected/created for the upload.
+    fhir_patient_id: str = ""
+    fhir_study_id: str = ""
+    fhir_binary_id: str = ""
     # Links this run to a real Conversation/Message row in Postgres so the
     # diagnostic exchange shows up as a titled conversation in the sidebar
     # instead of only living in this in-memory/JSON-snapshot run store.
@@ -97,6 +103,7 @@ class SkinDiagnosticStore:
         anamnesis: str,
         conversation_id: str = "",
         run_id: str | None = None,
+        fhir_patient_id: str = "",
     ) -> SkinDiagnosticRun:
         async with self._lock:
             run = SkinDiagnosticRun(
@@ -106,6 +113,7 @@ class SkinDiagnosticStore:
                 image_url=image_url,
                 anamnesis=anamnesis,
                 conversation_id=conversation_id,
+                fhir_patient_id=fhir_patient_id,
             )
             self._runs[run.id] = run
             self._persist(run)
