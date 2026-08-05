@@ -40,6 +40,7 @@ async def persist_assistant_message(
     conversation_id: UUID,
     user_id: UUID,
     content: str,
+    structured_data: dict[str, Any] | None = None,
 ) -> tuple[Conversation, Message]:
     async with AsyncSessionFactory() as session:
         result = await session.execute(
@@ -56,6 +57,7 @@ async def persist_assistant_message(
             conversation_id=conversation.id,
             role="assistant",
             content=content,
+            structured_data=structured_data,
         )
         try:
             session.add(assistant_message)
@@ -86,6 +88,10 @@ async def stream_persisted_exchange(
     queue_token = None
     loop = asyncio.get_event_loop()
     start_time = loop.time()
+    # Photos surfaced via search_skin_images / start_diagnosis_from_patient_image
+    # during this exchange — persisted onto the assistant Message so a page
+    # reload can still show the gallery, not just the current live session.
+    skin_images_collected: list[dict[str, Any]] = []
 
     try:
         yield format_sse(start_event, start_payload)
@@ -117,14 +123,27 @@ async def stream_persisted_exchange(
                 continue
 
             event_name = event.get("event")
-            if event_name in {"tool_start", "tool_end"}:
+            if event_name == "skin_images":
+                images = (event.get("data") or {}).get("images") or []
+                existing_ids = {
+                    img.get("binary_id") or img.get("study_id") for img in skin_images_collected
+                }
+                for img in images:
+                    if (img.get("binary_id") or img.get("study_id")) not in existing_ids:
+                        skin_images_collected.append(img)
+                        existing_ids.add(img.get("binary_id") or img.get("study_id"))
+            if event_name in {"tool_start", "tool_end", "skin_images"}:
                 yield format_sse(event_name, event.get("data") or {})
 
         assistant_content = await agent_task
+        structured_data = (
+            {"skin_images": skin_images_collected} if skin_images_collected else None
+        )
         conversation, assistant_message = await persist_assistant_message(
             conversation_id=conversation_id,
             user_id=user_id,
             content=assistant_content,
+            structured_data=structured_data,
         )
 
         conversation_payload = serialize_conversation(conversation)

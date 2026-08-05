@@ -99,6 +99,22 @@ export interface SkinDiagnosticStartResponse {
   conversation_title: string;
 }
 
+/** "new patient" popup shown right after an image is selected — see
+ * POST /skin-diagnostics/patients on the backend. */
+export interface PatientCreateResponse {
+  patient_id: string;
+  name: string;
+}
+
+export interface SkinImageResult {
+  study_id: string;
+  patient_id: string | null;
+  patient_name: string | null;
+  binary_id: string | null;
+  last_updated: string;
+  view_url: string | null;
+}
+
 export class ApiError extends Error {
   status: number;
   detail: string;
@@ -280,12 +296,16 @@ export async function startSkinDiagnostic(
   image: File,
   anamnesis: string,
   conversationId?: string | null,
+  fhirPatientId?: string | null,
 ): Promise<SkinDiagnosticStartResponse> {
   const body = new FormData();
   body.append("image", image);
   body.append("anamnesis", anamnesis);
   if (conversationId) {
     body.append("conversation_id", conversationId);
+  }
+  if (fhirPatientId) {
+    body.append("fhir_patient_id", fhirPatientId);
   }
 
   const response = await apiFetch("/skin-diagnostics/start", {
@@ -296,6 +316,49 @@ export async function startSkinDiagnostic(
     throw new ApiError(response.status, await readError(response));
   }
   return response.json() as Promise<SkinDiagnosticStartResponse>;
+}
+
+/**
+ * "New patient" popup: creates a minimal Patient on the live FHIR server
+ * right after a photo is picked. The returned patient_id is held in memory
+ * by the caller and sent back on startSkinDiagnostic so the photo's
+ * ImagingStudy is linked to this patient.
+ */
+export async function createFhirPatient(
+  name: string,
+  gender?: string | null,
+  birthYear?: string | null,
+): Promise<PatientCreateResponse> {
+  return jsonRequest<PatientCreateResponse>("/skin-diagnostics/patients", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      gender: gender || null,
+      birth_year: birthYear || null,
+    }),
+  });
+}
+
+/** Look up skin photos already stored on the FHIR server — by patient id,
+ * patient name, and/or a lastUpdated date range. Backs any direct-query UI
+ * (the chat agent has its own equivalent tool for natural-language asks). */
+export async function searchFhirSkinImages(params: {
+  patientId?: string;
+  patientName?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  count?: number;
+}): Promise<{ results: SkinImageResult[] }> {
+  const query = new URLSearchParams();
+  if (params.patientId) query.set("patient_id", params.patientId);
+  if (params.patientName) query.set("patient_name", params.patientName);
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  if (params.count) query.set("count", String(params.count));
+  return jsonRequest<{ results: SkinImageResult[] }>(
+    `/skin-diagnostics/fhir-images?${query.toString()}`,
+  );
 }
 
 export async function getSkinDiagnosticStatus(runId: string): Promise<SkinDiagnosticStatus> {

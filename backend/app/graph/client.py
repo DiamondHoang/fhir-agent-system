@@ -117,6 +117,15 @@ class CypherResultCollector:
         if preferences:
             self._push_event("preferences_detected", {"preferences": preferences})
 
+    def emit_skin_images(self, images: list[dict]) -> None:
+        """Emit a skin_images SSE event so the frontend can render the actual
+        dermatology photo thumbnails inline (authenticated fetch against
+        ``view_url``) instead of the model dropping a raw link in its text
+        reply — that link is unusable anyway since the endpoint requires an
+        Authorization header a plain hyperlink can't carry."""
+        if images:
+            self._push_event("skin_images", {"images": images})
+
     # -- existing collection methods -------------------------------------------
 
     def collect(self, records: list[dict]) -> None:

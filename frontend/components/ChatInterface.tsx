@@ -31,6 +31,7 @@ import {
   startSkinDiagnostic,
   getSkinDiagnosticStatus,
   submitSkinDiagnosticAnswers,
+  createFhirPatient,
 } from "@/lib/api";
 
 import type {
@@ -40,6 +41,7 @@ import type {
   SkinDiagnosticStatus,
   SkinPendingQuestion,
   SkinDiagnosticResult,
+  SkinImageResult,
 } from "@/lib/api";
 import { parseSseStream } from "@/lib/sse";
 import type { ParsedSseEvent } from "@/lib/sse";
@@ -92,6 +94,10 @@ interface Message extends ChatMessage {
   failed?: boolean;
   entities?: ExtractedEntity[];
   preferences?: DetectedPreference[];
+  // Photos found via search_skin_images / start_diagnosis_from_patient_image
+  // — rendered as real authenticated thumbnails instead of the model's text
+  // trying (and failing) to link to them directly.
+  skinImageResults?: SkinImageResult[];
   imagePreview?: string;
   type?: "text" | "skin_questions" | "skin_result" | "skin_progress";
   skinQuestions?: SkinPendingQuestion[];
@@ -208,6 +214,15 @@ function mapBackendMessage(message: ChatMessage): Message {
     mapped.type = "skin_result";
     mapped.skinResult = message.structured_data as unknown as SkinDiagnosticResult;
   }
+  // Photos found via search_skin_images / start_diagnosis_from_patient_image
+  // are persisted onto structured_data.skin_images (see chat_stream.py) so
+  // the gallery survives a reload, not just the live streaming session.
+  const skinImages = isRecord(message.structured_data)
+    ? message.structured_data.skin_images
+    : undefined;
+  if (Array.isArray(skinImages) && skinImages.length > 0) {
+    mapped.skinImageResults = skinImages as SkinImageResult[];
+  }
   return mapped;
 }
 
@@ -223,6 +238,70 @@ function TypingDots({ color = "gray.400" }: { color?: string }) {
       <span />
       <span />
       <span />
+    </Box>
+  );
+}
+
+/** Renders one skin photo found via search_skin_images /
+ * start_diagnosis_from_patient_image as an actual thumbnail. The endpoint
+ * (`view_url`) needs a Bearer token, so a plain <img src> can't load it
+ * directly — fetch the bytes ourselves and hand the component a blob URL,
+ * the same trick used for the user's own uploaded photo (see
+ * fetchAuthenticatedImage in lib/api.ts). */
+function SkinImageThumbnail({ image }: { image: SkinImageResult }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!image.view_url) {
+      setFailed(true);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    fetchAuthenticatedImage(`${API_ORIGIN}${image.view_url}`)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [image.view_url]);
+
+  return (
+    <Box w="140px" flexShrink={0} borderRadius="lg" overflow="hidden" borderWidth="1px" borderColor="gray.200" bg="white" shadow="xs">
+      <Box w="140px" h="140px" bg="gray.100" display="flex" alignItems="center" justifyContent="center">
+        {src ? (
+          <img
+            src={src}
+            alt={image.patient_name || "Ảnh da"}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : failed ? (
+          <AlertCircle size={20} color="#9CA3AF" />
+        ) : (
+          <Spinner size="sm" color="gray.400" />
+        )}
+      </Box>
+      <Box px={2} py={1.5}>
+        <Text fontSize="xs" fontWeight="medium" truncate>
+          {image.patient_name || "(không rõ bệnh nhân)"}
+        </Text>
+        {image.last_updated && (
+          <Text fontSize="2xs" color="gray.500">
+            {new Date(image.last_updated).toLocaleDateString("vi-VN")}
+          </Text>
+        )}
+      </Box>
     </Box>
   );
 }
@@ -270,6 +349,19 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // "New patient" popup — pops up right after a photo is picked, and its
+  // result (a FHIR patient_id) is held in memory so it can be sent along
+  // with /skin-diagnostics/start once the doctor hits send (with or
+  // without typed symptoms).
+  const [patientModalOpen, setPatientModalOpen] = useState(false);
+  const [patientNameInput, setPatientNameInput] = useState("");
+  const [patientGenderInput, setPatientGenderInput] = useState("");
+  const [patientBirthYearInput, setPatientBirthYearInput] = useState("");
+  const [creatingPatient, setCreatingPatient] = useState(false);
+  const [patientModalError, setPatientModalError] = useState<string | null>(null);
+  const [pendingFhirPatientId, setPendingFhirPatientId] = useState<string | null>(null);
+  const [pendingFhirPatientName, setPendingFhirPatientName] = useState<string | null>(null);
+
   // Skin Diagnostic State
   const [activeSkinRunId, setActiveSkinRunId] = useState<string | null>(null);
   const [skinStatus, setSkinStatus] = useState<SkinDiagnosticStatus | null>(null);
@@ -290,6 +382,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingEntitiesRef = useRef<ExtractedEntity[]>([]);
   const streamingPreferencesRef = useRef<DetectedPreference[]>([]);
+  const streamingSkinImagesRef = useRef<SkinImageResult[]>([]);
 
   // Health Status
   const [backendStatus, setBackendStatus] = useState<"ok" | "degraded" | "offline">("offline");
@@ -521,6 +614,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     setStreamingPreferences([]);
     streamingEntitiesRef.current = [];
     streamingPreferencesRef.current = [];
+    streamingSkinImagesRef.current = [];
     textBufferRef.current = "";
   }
 
@@ -532,6 +626,9 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     setPqrstAnswers({});
     setSelectedFile(null);
     setFilePreview(null);
+    closePatientModal();
+    setPendingFhirPatientId(null);
+    setPendingFhirPatientName(null);
     setMessages([]);
     resetStreamingState();
     setLoading(false);
@@ -547,6 +644,16 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     setSelectedFile(file);
     if (filePreview) URL.revokeObjectURL(filePreview);
     setFilePreview(URL.createObjectURL(file));
+    // Every new photo is a fresh dermatology case — never carry over a
+    // patient picked for a previous photo. Pop the "new patient" form right
+    // away, same as the doctor selecting the photo triggers it in the plan.
+    setPendingFhirPatientId(null);
+    setPendingFhirPatientName(null);
+    setPatientNameInput("");
+    setPatientGenderInput("");
+    setPatientBirthYearInput("");
+    setPatientModalError(null);
+    setPatientModalOpen(true);
   };
 
   const clearSelectedFile = () => {
@@ -554,7 +661,50 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     if (filePreview) URL.revokeObjectURL(filePreview);
     setFilePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    closePatientModal();
+    setPendingFhirPatientId(null);
+    setPendingFhirPatientName(null);
   };
+
+  function closePatientModal() {
+    setPatientModalOpen(false);
+    setPatientModalError(null);
+  }
+
+  /** Submit of the "new patient" popup — creates a minimal Patient on the
+   * live FHIR server, then remembers its id for the upcoming send. */
+  async function handleCreatePatient() {
+    const name = patientNameInput.trim();
+    if (!name || creatingPatient) return;
+    setCreatingPatient(true);
+    setPatientModalError(null);
+    try {
+      const result = await createFhirPatient(
+        name,
+        patientGenderInput || null,
+        patientBirthYearInput.trim() || null,
+      );
+      setPendingFhirPatientId(result.patient_id);
+      setPendingFhirPatientName(result.name);
+      setPatientModalOpen(false);
+    } catch (err) {
+      setPatientModalError(
+        err instanceof Error ? err.message : "Không thể tạo bệnh nhân trên FHIR server",
+      );
+    } finally {
+      setCreatingPatient(false);
+    }
+  }
+
+  /** Doctor just wants the photo saved/analyzed without linking it to a
+   * FHIR patient this time — close the popup, leave pendingFhirPatientId
+   * empty, /skin-diagnostics/start still works fine without it. */
+  function handleSkipPatient() {
+    setPendingFhirPatientId(null);
+    setPendingFhirPatientName(null);
+    setPatientModalOpen(false);
+    setPatientModalError(null);
+  }
 
   async function handleAuthSubmit() {
     const trimmedUsername = username.trim();
@@ -684,8 +834,19 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
 
       setMessages((prev) => [...prev, localUserMsg]);
 
+      const fhirPatientIdForRun = pendingFhirPatientId;
+      // Consumed by this run — the next photo picked must trigger its own
+      // "new patient" popup rather than silently reusing this one.
+      setPendingFhirPatientId(null);
+      setPendingFhirPatientName(null);
+
       try {
-        const startRes = await startSkinDiagnostic(file, messageText, activeConversationId);
+        const startRes = await startSkinDiagnostic(
+          file,
+          messageText,
+          activeConversationId,
+          fhirPatientIdForRun,
+        );
         setActiveSkinRunId(startRes.run_id);
 
         // The skin-diagnostic run now creates/reuses a real Conversation on
@@ -887,6 +1048,19 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           }
           break;
 
+        case "skin_images":
+          if (Array.isArray(data.images)) {
+            const incoming = data.images as SkinImageResult[];
+            const existingIds = new Set(
+              streamingSkinImagesRef.current.map((img) => img.binary_id || img.study_id),
+            );
+            const deduped = incoming.filter(
+              (img) => !existingIds.has(img.binary_id || img.study_id),
+            );
+            streamingSkinImagesRef.current = [...streamingSkinImagesRef.current, ...deduped];
+          }
+          break;
+
         case "done": {
           if (flushTimerRef.current) {
             clearTimeout(flushTimerRef.current);
@@ -911,12 +1085,16 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           if (isChatMessage(assistantMessage)) {
             const finalEntities = streamingEntitiesRef.current;
             const finalPreferences = streamingPreferencesRef.current;
+            const finalSkinImages = streamingSkinImagesRef.current;
+            const mappedAssistant = mapBackendMessage(assistantMessage);
             setMessages((prev) => appendMessageOnce(prev, {
-              ...mapBackendMessage(assistantMessage),
+              ...mappedAssistant,
               content: responseText || assistantMessage.content,
               toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
               entities: finalEntities.length > 0 ? [...finalEntities] : undefined,
               preferences: finalPreferences.length > 0 ? [...finalPreferences] : undefined,
+              skinImageResults:
+                finalSkinImages.length > 0 ? [...finalSkinImages] : mappedAssistant.skinImageResults,
             }));
           }
           resetStreamingState();
@@ -1047,6 +1225,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   }
 
   return (
+    <>
     <Flex h="100vh" w="100vw" overflow="hidden" bg="white">
       {/* Left Sidebar */}
       {sidebarOpen && (
@@ -1276,6 +1455,23 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                           </HStack>
                         )}
 
+                        {/* Skin Photos found via search_skin_images /
+                            start_diagnosis_from_patient_image — real
+                            thumbnails, not a text link (the endpoint needs
+                            auth a plain link can't provide). */}
+                        {msg.skinImageResults && msg.skinImageResults.length > 0 && (
+                          <Box mt={2}>
+                            <Text fontSize="xs" fontWeight="semibold" color="gray.600" mb={2}>
+                              Ảnh da tìm thấy ({msg.skinImageResults.length})
+                            </Text>
+                            <HStack gap={2} overflowX="auto" pb={1}>
+                              {msg.skinImageResults.map((img) => (
+                                <SkinImageThumbnail key={img.binary_id || img.study_id} image={img} />
+                              ))}
+                            </HStack>
+                          </Box>
+                        )}
+
                         {/* Skin Diagnostic Questions Card */}
                         {msg.type === "skin_questions" && msg.skinQuestions && (
                           <Box mt={1}>
@@ -1454,25 +1650,41 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
               {/* Image Preview Chip — inside the input card, like ChatGPT */}
               {filePreview && (
                 <Box mb={2} pl={1}>
-                  <Box position="relative" w="64px" h="64px" borderRadius="lg" overflow="hidden" borderWidth="1px" borderColor="gray.200" shadow="xs">
-                    <img src={filePreview} alt="Xem trước" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    <IconButton
-                      aria-label="Xóa ảnh"
-                      size="2xs"
-                      borderRadius="full"
-                      bg="gray.800"
-                      color="white"
-                      _hover={{ bg: "gray.900" }}
-                      position="absolute"
-                      top="2px"
-                      right="2px"
-                      minW="18px"
-                      h="18px"
-                      onClick={clearSelectedFile}
-                    >
-                      <X size={10} />
-                    </IconButton>
-                  </Box>
+                  <Flex align="center" gap={2}>
+                    <Box position="relative" w="64px" h="64px" borderRadius="lg" overflow="hidden" borderWidth="1px" borderColor="gray.200" shadow="xs">
+                      <img src={filePreview} alt="Xem trước" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <IconButton
+                        aria-label="Xóa ảnh"
+                        size="2xs"
+                        borderRadius="full"
+                        bg="gray.800"
+                        color="white"
+                        _hover={{ bg: "gray.900" }}
+                        position="absolute"
+                        top="2px"
+                        right="2px"
+                        minW="18px"
+                        h="18px"
+                        onClick={clearSelectedFile}
+                      >
+                        <X size={10} />
+                      </IconButton>
+                    </Box>
+                    {pendingFhirPatientId ? (
+                      <Badge colorPalette="green" borderRadius="full" px={2} py={1} fontSize="xs">
+                        Bệnh nhân: {pendingFhirPatientName} (ID {pendingFhirPatientId})
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="2xs"
+                        variant="outline"
+                        borderRadius="full"
+                        onClick={() => setPatientModalOpen(true)}
+                      >
+                        + Gán bệnh nhân FHIR
+                      </Button>
+                    )}
+                  </Flex>
                 </Box>
               )}
 
@@ -1534,5 +1746,103 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
         </Box>
       </Flex>
     </Flex>
+
+    {/* "New patient" popup — pops up right after a photo is picked so the
+        doctor can create a minimal Patient on the FHIR server before the
+        run kicks off. Plain fixed-position overlay (no Chakra Dialog
+        dependency) so it stays simple and self-contained. */}
+    {patientModalOpen && (
+      <Box
+        position="fixed"
+        inset={0}
+        bg="blackAlpha.500"
+        zIndex={1000}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        onClick={() => (creatingPatient ? null : closePatientModal())}
+      >
+        <Box
+          bg="white"
+          borderRadius="xl"
+          shadow="lg"
+          p={5}
+          w="360px"
+          maxW="90vw"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Heading size="sm" mb={1}>Tạo bệnh nhân mới</Heading>
+          <Text fontSize="xs" color="gray.500" mb={4}>
+            Ảnh da liễu sẽ được lưu vào FHIR server và gắn với bệnh nhân này (ImagingStudy).
+          </Text>
+
+          <VStack gap={3} align="stretch">
+            <Box>
+              <Text fontSize="xs" mb={1} color="gray.600">Họ và tên *</Text>
+              <Input
+                size="sm"
+                placeholder="Ví dụ: Nguyễn Nam Vũ"
+                value={patientNameInput}
+                onChange={(e) => setPatientNameInput(e.target.value)}
+                autoFocus
+              />
+            </Box>
+            <HStack gap={2}>
+              <Box flex={1}>
+                <Text fontSize="xs" mb={1} color="gray.600">Giới tính</Text>
+                <select
+                  value={patientGenderInput}
+                  onChange={(e) => setPatientGenderInput(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    borderRadius: "6px",
+                    border: "1px solid #E2E8F0",
+                    fontSize: "13px",
+                  }}
+                >
+                  <option value="">— Không rõ —</option>
+                  <option value="male">Nam</option>
+                  <option value="female">Nữ</option>
+                  <option value="other">Khác</option>
+                  <option value="unknown">Không rõ</option>
+                </select>
+              </Box>
+              <Box flex={1}>
+                <Text fontSize="xs" mb={1} color="gray.600">Năm sinh</Text>
+                <Input
+                  size="sm"
+                  placeholder="1990"
+                  maxLength={4}
+                  value={patientBirthYearInput}
+                  onChange={(e) => setPatientBirthYearInput(e.target.value.replace(/[^0-9]/g, ""))}
+                />
+              </Box>
+            </HStack>
+
+            {patientModalError && (
+              <Text fontSize="xs" color="red.500">{patientModalError}</Text>
+            )}
+
+            <HStack justify="flex-end" gap={2} pt={1}>
+              <Button size="sm" variant="ghost" onClick={handleSkipPatient} disabled={creatingPatient}>
+                Bỏ qua
+              </Button>
+              <Button
+                size="sm"
+                bg="#10a37f"
+                color="white"
+                _hover={{ bg: "#0d8c6d" }}
+                onClick={handleCreatePatient}
+                disabled={!patientNameInput.trim() || creatingPatient}
+              >
+                {creatingPatient ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : "Tạo bệnh nhân"}
+              </Button>
+            </HStack>
+          </VStack>
+        </Box>
+      </Box>
+    )}
+    </>
   );
 }

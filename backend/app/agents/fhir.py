@@ -20,7 +20,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.usage import UsageLimits
 
-from app.graph.client import execute_cypher, get_schema
+from app.graph.client import execute_cypher, get_collector, get_schema
 from app.services.long_term_memory import save_conversation_memory, search_memories
 
 
@@ -308,6 +308,14 @@ Provide:
 - direct answer;
 - structured tables or lists when appropriate;
 - clear distinction between facts and uncertainty.
+
+Skin photo results (search_skin_images / start_diagnosis_from_patient_image)
+are rendered by the UI as actual image thumbnails as soon as the tool
+returns them — never include a view_url, binary id link, or any raw URL
+pointing at a photo in your reply; it needs an auth header the user's
+browser can't attach, so it would only ever 401. Just describe the result
+in words (patient name, count, dates); the photo(s) already appear on
+screen.
 
 Do not reveal:
 
@@ -1819,6 +1827,14 @@ async def search_skin_images(
     - The user means their own just-uploaded photo in this chat; use
       diagnose_skin_condition instead.
 
+    IMPORTANT — the UI renders the matched photo(s) inline automatically
+    (as real thumbnails) the moment this tool returns a non-empty list; you
+    do not need to, and must NOT, put ``view_url``/binary links or raw URLs
+    in your reply — they require an auth header a plain link can't carry
+    and would just 401 if the person clicked it. In your reply just name
+    the patient and how many photos / what dates were found; the photos
+    themselves already appear on screen.
+
     Returns:
         str: JSON payload with a list of {study_id, patient_id,
         patient_name, binary_id, last_updated, view_url}. last_updated is
@@ -1840,12 +1856,19 @@ async def search_skin_images(
             date_to=date_to or None,
             count=count,
         )
+        # Push the actual photos to the UI as a dedicated SSE event — the
+        # model's text reply should only describe them, never link to them
+        # (see docstring above), so the frontend renders real <img>
+        # thumbnails instead of a raw, auth-requiring URL the user can't
+        # actually open.
+        get_collector().emit_skin_images(results)
         model_content = _json_response(status="ok", data=results, count=len(results))
     except FhirImageError as exc:
         model_content = _json_response(status="error", data=[], message=str(exc))
     _record_tool_result_chars(len(model_content))
     logger.info("TOOL END | tool=search_skin_images | chars=%s", len(model_content))
     return model_content
+
 
 
 @agent.tool
@@ -1881,6 +1904,8 @@ async def start_diagnosis_from_patient_image(
       as search_skin_images, downloads it, and kicks off the same
       multi-step vision + clinical-interview pipeline used for a live photo
       upload. This takes time and may pause for clinical Q&A.
+    - The UI shows the source photo inline the moment it's found — do not
+      add a view_url/link in your reply, just say whose photo it is.
 
     Returns:
         str: JSON payload. status "no_patient" (no matching patient),
@@ -1923,6 +1948,11 @@ async def start_diagnosis_from_patient_image(
         model_content = _json_response(status="ok", data=payload)
         _record_tool_result_chars(len(model_content))
         return model_content
+
+    # Show the photo being diagnosed in the UI right away (same mechanism as
+    # search_skin_images) — the model's reply should still just narrate,
+    # never link to it.
+    get_collector().emit_skin_images([match])
 
     raw_bytes, content_type = await fhir_images.fetch_binary(binary_id)
     ext = {"image/png": ".png", "image/webp": ".webp"}.get(content_type, ".jpg")

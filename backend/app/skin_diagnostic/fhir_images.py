@@ -22,6 +22,7 @@ always XC):
 from __future__ import annotations
 
 import logging
+import unicodedata
 from typing import Any
 
 import httpx
@@ -68,9 +69,26 @@ async def create_patient(name: str, gender: str | None, birth_year: str | None) 
     gender: "male" | "female" | "other" | "unknown" | None
     birth_year: e.g. "1990" (FHIR accepts a year-only birthDate)
     """
+    clean_name = name.strip()
+    # Split "Nguyễn Kim Cương" -> family="Nguyễn", given=["Kim", "Cương"]
+    # (Vietnamese order: family name first). This is in addition to `text`,
+    # never instead of it — `text` stays the source of truth for display,
+    # but populating family/given lets HAPI's native `name` search parameter
+    # (a *prefix*-only match) succeed on individual name parts, not just on
+    # the very first word of the full string. Search still falls back to a
+    # substring match server-side (see search_patients_by_name) for
+    # fragments that land in the middle of a word.
+    words = clean_name.split()
+    human_name: dict[str, Any] = {"use": "anonymous", "text": clean_name}
+    if len(words) >= 2:
+        human_name["family"] = words[0]
+        human_name["given"] = words[1:]
+    elif words:
+        human_name["given"] = words
+
     payload: dict[str, Any] = {
         "resourceType": "Patient",
-        "name": [{"use": "anonymous", "text": name.strip()}],
+        "name": [human_name],
     }
     if gender:
         payload["gender"] = gender
@@ -85,21 +103,19 @@ async def create_patient(name: str, gender: str | None, birth_year: str | None) 
     data = resp.json()
     patient_id = data["id"]
     logger.info("Patient/%s created (name=%r)", patient_id, name)
-    return {"patient_id": patient_id, "name": name.strip()}
+    return {"patient_id": patient_id, "name": clean_name}
 
 
-async def search_patients_by_name(query: str, count: int = 20) -> list[dict[str, Any]]:
-    """Search Patient by name fragment. Returns [{"patient_id", "name"}, ...]."""
-    async with await _client() as client:
-        resp = await client.get(
-            "/Patient",
-            params={"name": query, "_count": count},
-            headers=_FHIR_JSON_HEADERS,
-        )
-    if resp.status_code != 200:
-        logger.error("FHIR Patient search failed: %s %s", resp.status_code, resp.text[:500])
-        raise FhirImageError(f"FHIR Patient search failed: {resp.text[:300]}")
-    bundle = resp.json()
+def _normalize_for_match(text: str) -> str:
+    """Lowercase + strip Vietnamese diacritics, e.g. "Kim Cương" ->
+    "kim cuong". Used so a fragment search matches regardless of accents
+    or how the doctor typed the query."""
+    decomposed = unicodedata.normalize("NFD", text)
+    stripped = "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+    return stripped.replace("đ", "d").replace("Đ", "D").lower().strip()
+
+
+def _patients_from_bundle(bundle: dict[str, Any]) -> list[dict[str, Any]]:
     results = []
     for entry in bundle.get("entry", []):
         resource = entry.get("resource", {})
@@ -107,6 +123,56 @@ async def search_patients_by_name(query: str, count: int = 20) -> list[dict[str,
         display_name = names[0].get("text") if names else None
         results.append({"patient_id": resource.get("id"), "name": display_name or "(không tên)"})
     return results
+
+
+async def search_patients_by_name(query: str, count: int = 20) -> list[dict[str, Any]]:
+    """Search Patient by name fragment, regardless of where the fragment
+    falls in the full name and regardless of accents/case.
+
+    HAPI's plain ``name`` search parameter is a *prefix*-only match per the
+    FHIR spec — a query like "Kim Cương" will NOT match a stored patient
+    named "Nguyễn Kim Cương" because it isn't a prefix of the family/given/
+    text parts, only a match starting at the very first word would work.
+    That silently broke every "lấy ảnh da của bệnh nhân <tên/tên đệm>"
+    request whenever the fragment wasn't the leading word of the full name.
+
+    Strategy: try the server-side ``:contains`` modifier first (works when
+    the FHIR server allows contains searches), then always fall back to
+    fetching a broader patient set and filtering client-side with an
+    accent-insensitive substring match — this guarantees correct results
+    even if the server has contains-search disabled.
+    """
+    normalized_query = _normalize_for_match(query)
+    if not normalized_query:
+        return []
+
+    async with await _client() as client:
+        resp = await client.get(
+            "/Patient",
+            params={"name:contains": query, "_count": count},
+            headers=_FHIR_JSON_HEADERS,
+        )
+    if resp.status_code == 200:
+        results = _patients_from_bundle(resp.json())
+        if results:
+            return results
+    elif resp.status_code not in (400, 422):
+        # A real server error (not just "modifier unsupported") — surface it.
+        logger.error("FHIR Patient :contains search failed: %s %s", resp.status_code, resp.text[:500])
+
+    # Fallback: pull a broad set of patients and match substrings locally.
+    async with await _client() as client:
+        resp = await client.get(
+            "/Patient",
+            params={"_count": max(count, 200), "_sort": "-_lastUpdated"},
+            headers=_FHIR_JSON_HEADERS,
+        )
+    if resp.status_code != 200:
+        logger.error("FHIR Patient search failed: %s %s", resp.status_code, resp.text[:500])
+        raise FhirImageError(f"FHIR Patient search failed: {resp.text[:300]}")
+    all_patients = _patients_from_bundle(resp.json())
+    matched = [p for p in all_patients if normalized_query in _normalize_for_match(p["name"])]
+    return matched[:count]
 
 
 # ---------------------------------------------------------------------------
