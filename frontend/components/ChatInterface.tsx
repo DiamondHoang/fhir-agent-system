@@ -46,14 +46,6 @@ import type { ParsedSseEvent } from "@/lib/sse";
 
 const CHAT_STREAM_TIMEOUT_MS = 900_000;
 
-export const PQRST_COLORS: Record<string, string> = {
-  P: "#d946ef",  // magenta
-  Q: "#06b6d4",  // cyan
-  R: "#3b82f6",  // blue
-  S: "#ef4444",  // red
-  T: "#eab308",  // yellow
-};
-
 export const RANK_COLORS = ["#22c55e", "#eab308", "#3b82f6"];
 export const RANK_LABELS = [
   "#1 — Khả năng cao nhất",
@@ -1302,16 +1294,6 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                                 return (
                                   <Box key={qNum} p={3} bg="white" borderRadius="md" borderWidth="1px" borderColor="gray.200">
                                     <HStack gap={2} mb={1}>
-                                      <Badge
-                                        size="xs"
-                                        style={{
-                                          background: (PQRST_COLORS[q.pqrst_category] || "#6b7280") + "20",
-                                          color: PQRST_COLORS[q.pqrst_category] || "#6b7280",
-                                          fontWeight: "bold",
-                                        }}
-                                      >
-                                        {q.pqrst_category}
-                                      </Badge>
                                       <Text fontSize="xs" color="gray.500">Câu {q.question_num}</Text>
                                     </HStack>
                                     <Text fontSize="sm" fontWeight="medium" mb={2}>{q.question}</Text>
@@ -1554,9 +1536,3 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     </Flex>
   );
 }
-
-// NOTE: the tool-by-tool timeline UI (previously rendered here with
-// Chakra's Timeline component) was removed from the chat view on purpose —
-// see the comments where `streamingToolCalls` / `msg.toolCalls` are handled
-// above. Tool execution is still fully logged on the backend
-// (app/agents/fhir.py, "TOOL START"/"TOOL END" log lines) for debugging.
