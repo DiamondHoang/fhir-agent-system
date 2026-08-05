@@ -121,11 +121,11 @@ class Conversation(Base):
         server_default="0",
     )
 
-    # FHIR Patient this conversation's skin-diagnostic photos belong to
-    # (see app/skin_diagnostic/fhir_images.py). Set once the "new patient"
-    # popup creates a Patient on the live FHIR server; nullable because most
+    # Neo4j Patient (FHIRResource:Patient) this conversation's skin-diagnostic
+    # photos belong to (see app/skin_images/*). Set once the doctor picks an
+    # existing patient for an uploaded photo; nullable because most
     # conversations aren't about a photographed patient at all.
-    fhir_patient_id: Mapped[str | None] = mapped_column(
+    patient_id: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
     )
