@@ -2,18 +2,32 @@ import requests
 
 import os
 
+# ─── LLM Provider Switch ──────────────────────────────────────────────────
+# "ollama"  → dùng Ollama chạy local/nội bộ (mặc định)
+# "company" → dùng API nội bộ công ty (khi endpoint company sống lại)
+# Đổi bằng cách set LLM_PROVIDER=company trong .env rồi `docker compose up -d`
+# (không cần --build, chỉ là biến môi trường).
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
+_USE_OLLAMA = LLM_PROVIDER == "ollama"
+
+
+def _provider_env(company_key: str, ollama_key: str, default: str = "") -> str:
+    """Đọc biến môi trường tương ứng theo LLM_PROVIDER hiện tại."""
+    return os.getenv(ollama_key if _USE_OLLAMA else company_key, default)
+
+
 # ─── Vision Model — Multimodal (Phân tích hình ảnh) ──────────────────────────
-VISION_MODEL_URL = os.getenv("VISION_MODEL_URL", "http://172.16.12.230:8000")
-VISION_MODEL_DEFAULT = os.getenv("VISION_MODEL_DEFAULT", "gemma-4-26B-A4B-it")
+VISION_MODEL_URL = _provider_env("COMPANY_VISION_URL", "OLLAMA_VISION_URL", "http://172.16.12.230:8000")
+VISION_MODEL_DEFAULT = _provider_env("COMPANY_VISION_MODEL", "OLLAMA_VISION_MODEL", "gemma-4-26B-A4B-it")
 # Từ khóa ưu tiên để nhận dạng đúng model LLM vision (substring match)
-VISION_MODEL_PREFER = os.getenv("VISION_MODEL_PREFER", "gemma4")
+VISION_MODEL_PREFER = _provider_env("COMPANY_VISION_PREFER", "OLLAMA_VISION_PREFER", "gemma4")
 VISION_MODEL_TIMEOUT = int(os.getenv("VISION_MODEL_TIMEOUT", "600"))
 
 # ─── Reasoning Model — Text (Lập kế hoạch & Chẩn đoán lâm sàng) ─────────────
-REASONING_MODEL_URL = os.getenv("REASONING_MODEL_URL", "http://172.16.12.230:8000")
-REASONING_MODEL_DEFAULT = os.getenv("REASONING_MODEL_DEFAULT", "gemma-4-26B-A4B-it")
+REASONING_MODEL_URL = _provider_env("COMPANY_REASONING_URL", "OLLAMA_REASONING_URL", "http://172.16.12.230:8000")
+REASONING_MODEL_DEFAULT = _provider_env("COMPANY_REASONING_MODEL", "OLLAMA_REASONING_MODEL", "gemma-4-26B-A4B-it")
 # Từ khóa ưu tiên để nhận dạng đúng model LLM reasoning (substring match)
-REASONING_MODEL_PREFER = os.getenv("REASONING_MODEL_PREFER", "gemma4")
+REASONING_MODEL_PREFER = _provider_env("COMPANY_REASONING_PREFER", "OLLAMA_REASONING_PREFER", "gemma4")
 REASONING_MODEL_TIMEOUT = int(os.getenv("REASONING_MODEL_TIMEOUT", "1200"))
 
 # Danh sách model KHÔNG phải LLM (embedding, reranker...) — bị loại khỏi selection
@@ -70,8 +84,8 @@ DEFAULT_MAX_TOKENS = 8192
 import os
 
 # Embedding model — dùng cho knowledge base search (utils/knowledge_base.py).
-EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://172.16.12.230:8004")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
+EMBEDDING_URL = _provider_env("COMPANY_KB_EMBEDDING_URL", "OLLAMA_KB_EMBEDDING_URL", "http://172.16.12.230:8004")
+EMBEDDING_MODEL = _provider_env("COMPANY_KB_EMBEDDING_MODEL", "OLLAMA_KB_EMBEDDING_MODEL", "BAAI/bge-m3")
 EMBEDDING_TIMEOUT = int(os.getenv("EMBEDDING_TIMEOUT", "120"))
 
 # Qdrant vector store cho knowledge base.

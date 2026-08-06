@@ -214,6 +214,37 @@ async def _save_diagnosis_message(state: dict, run) -> None:
         )
 
 
+async def _save_photo_to_neo4j_if_linked(session_id: str, image_path: str, state: dict, run) -> None:
+    """Case 2 from skin_diagnostic/router.py's /start docstring: a patient
+    was selected (`neo4j_patient_id`) AND symptoms were typed, so the run
+    went through the interview pipeline above instead of the router's
+    early-return "save only" branch. That branch already calls
+    save_skin_photo_result(); this is the matching call for after a full
+    diagnosis finishes, so the photo + diagnosis conclusion still end up in
+    the patient's Neo4j record instead of only in Postgres/the run store.
+
+    Runs after _save_diagnosis_message so a failure here (Neo4j down, CyFHIR
+    error, etc.) never hides the diagnosis result the user already sees in
+    the chat — same fire-and-log pattern as the other _save_* helpers.
+    """
+    if run is None or not run.neo4j_patient_id:
+        return
+
+    from app.skin_images.service import save_skin_photo_result
+
+    try:
+        await save_skin_photo_result(
+            patient_id=run.neo4j_patient_id,
+            image_path=image_path,
+            conclusion_text=_build_diagnosis_summary(state),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to save skin photo + diagnosis to Neo4j for run %s (patient %s)",
+            session_id, run.neo4j_patient_id,
+        )
+
+
 def _merge_new_differentials(state: dict, new_diffs: list, round_label: str) -> None:
     """Fold planner-suggested `additional_differentials` into state, then re-dedup."""
     from pipeline.nodes.planner import deduplicate_differentials_with_llm
@@ -481,6 +512,7 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
         run = await store.get(session_id)
         await _save_diagnosis_to_memory(session_id, anamnesis, state, run)
         await _save_diagnosis_message(state, run)
+        await _save_photo_to_neo4j_if_linked(session_id, image_path, state, run)
 
     except Exception as e:
         await store.update(session_id, status="error", error=str(e))

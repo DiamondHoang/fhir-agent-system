@@ -9,7 +9,7 @@ import {
 import {
   Send, RotateCcw, ChevronDown, Bot, User, Sparkles,
   Plus, Trash2, LogOut, ImagePlus, X, Stethoscope, Loader2, CheckCircle2,
-  PanelLeft, AlertCircle, SquarePen,
+  PanelLeft, AlertCircle, SquarePen, Square, Save,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -29,9 +29,10 @@ import {
   openMessageStream,
   register,
   startSkinDiagnostic,
+  saveSkinPhotoOnly,
   getSkinDiagnosticStatus,
   submitSkinDiagnosticAnswers,
-  createFhirPatient,
+  searchExistingPatients,
 } from "@/lib/api";
 
 import type {
@@ -42,6 +43,7 @@ import type {
   SkinPendingQuestion,
   SkinDiagnosticResult,
   SkinImageResult,
+  PatientSearchResult,
 } from "@/lib/api";
 import { parseSseStream } from "@/lib/sse";
 import type { ParsedSseEvent } from "@/lib/sse";
@@ -349,18 +351,32 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // "New patient" popup — pops up right after a photo is picked, and its
-  // result (a FHIR patient_id) is held in memory so it can be sent along
-  // with /skin-diagnostics/start once the doctor hits send (with or
-  // without typed symptoms).
-  const [patientModalOpen, setPatientModalOpen] = useState(false);
-  const [patientNameInput, setPatientNameInput] = useState("");
-  const [patientGenderInput, setPatientGenderInput] = useState("");
-  const [patientBirthYearInput, setPatientBirthYearInput] = useState("");
-  const [creatingPatient, setCreatingPatient] = useState(false);
-  const [patientModalError, setPatientModalError] = useState<string | null>(null);
-  const [pendingFhirPatientId, setPendingFhirPatientId] = useState<string | null>(null);
-  const [pendingFhirPatientName, setPendingFhirPatientName] = useState<string | null>(null);
+  // Image-attach popup: only the "existing patient" (Neo4j) branch exists
+  // now — the old "new patient" (live FHIR server) flow was removed, so a
+  // photo is either linked to an existing Neo4j patient or not saved to a
+  // patient record at all (diagnosis-only, see the 3 cases documented on
+  // POST /skin-diagnostics/start).
+  const [patientChoiceModalOpen, setPatientChoiceModalOpen] = useState(false);
+  const [existingPatientModalOpen, setExistingPatientModalOpen] = useState(false);
+  const [existingPatientQuery, setExistingPatientQuery] = useState("");
+  const [existingPatientResults, setExistingPatientResults] = useState<PatientSearchResult[]>([]);
+  const [searchingExistingPatients, setSearchingExistingPatients] = useState(false);
+  const [existingPatientError, setExistingPatientError] = useState<string | null>(null);
+  const existingPatientDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingNeo4jPatientId, setPendingNeo4jPatientId] = useState<string | null>(null);
+  const [pendingNeo4jPatientName, setPendingNeo4jPatientName] = useState<string | null>(null);
+  // Lightweight top-right toast for actions that don't produce a chat
+  // message (e.g. "save photo to patient record, no diagnosis") — separate
+  // from `error`, which renders as a banner under the header bar.
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [savingPhotoOnly, setSavingPhotoOnly] = useState(false);
+  const saveNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showSaveNotice(message: string) {
+    setSaveNotice(message);
+    if (saveNoticeTimerRef.current) clearTimeout(saveNoticeTimerRef.current);
+    saveNoticeTimerRef.current = setTimeout(() => setSaveNotice(null), 3000);
+  }
 
   // Skin Diagnostic State
   const [activeSkinRunId, setActiveSkinRunId] = useState<string | null>(null);
@@ -380,6 +396,11 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   const textBufferRef = useRef("");
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Set right before abort() when the user clicks the Stop button, so the
+  // catch block in sendMessage can tell a deliberate stop apart from a
+  // network failure or the 15-minute safety timeout, and keep the partial
+  // answer instead of showing an error bubble.
+  const stopRequestedRef = useRef(false);
   const streamingEntitiesRef = useRef<ExtractedEntity[]>([]);
   const streamingPreferencesRef = useRef<DetectedPreference[]>([]);
   const streamingSkinImagesRef = useRef<SkinImageResult[]>([]);
@@ -607,6 +628,25 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     setLoading(false);
   }
 
+  /** "Dừng" button — mirrors Claude/ChatGPT's stop-generation control.
+   * Two cases:
+   *  - A text/agent SSE stream is in flight: mark it as a deliberate stop
+   *    and abort the fetch. The catch block in sendMessage sees
+   *    stopRequestedRef and keeps whatever text/tool calls had already
+   *    streamed in as a real message bubble instead of showing an error.
+   *  - A skin-diagnostic run is in progress (status polling, no abortable
+   *    fetch): just stop polling and drop the loading state — the backend
+   *    run keeps going server-side, but the UI stops waiting on it. */
+  function handleStopGeneration() {
+    if (abortControllerRef.current) {
+      stopRequestedRef.current = true;
+      abortControllerRef.current.abort();
+    } else {
+      stopSkinPolling();
+      setLoading(false);
+    }
+  }
+
   function resetStreamingState() {
     setStreamingContent("");
     setStreamingToolCalls([]);
@@ -626,9 +666,10 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     setPqrstAnswers({});
     setSelectedFile(null);
     setFilePreview(null);
-    closePatientModal();
-    setPendingFhirPatientId(null);
-    setPendingFhirPatientName(null);
+    setPatientChoiceModalOpen(false);
+    setExistingPatientModalOpen(false);
+    setPendingNeo4jPatientId(null);
+    setPendingNeo4jPatientName(null);
     setMessages([]);
     resetStreamingState();
     setLoading(false);
@@ -645,15 +686,14 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     if (filePreview) URL.revokeObjectURL(filePreview);
     setFilePreview(URL.createObjectURL(file));
     // Every new photo is a fresh dermatology case — never carry over a
-    // patient picked for a previous photo. Pop the "new patient" form right
-    // away, same as the doctor selecting the photo triggers it in the plan.
-    setPendingFhirPatientId(null);
-    setPendingFhirPatientName(null);
-    setPatientNameInput("");
-    setPatientGenderInput("");
-    setPatientBirthYearInput("");
-    setPatientModalError(null);
-    setPatientModalOpen(true);
+    // patient picked for a previous photo.
+    setPendingNeo4jPatientId(null);
+    setPendingNeo4jPatientName(null);
+    setExistingPatientQuery("");
+    setExistingPatientResults([]);
+    setExistingPatientError(null);
+    // Ask whether this photo belongs to an existing patient before sending.
+    setPatientChoiceModalOpen(true);
   };
 
   const clearSelectedFile = () => {
@@ -661,49 +701,82 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     if (filePreview) URL.revokeObjectURL(filePreview);
     setFilePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    closePatientModal();
-    setPendingFhirPatientId(null);
-    setPendingFhirPatientName(null);
+    setPatientChoiceModalOpen(false);
+    closeExistingPatientModal();
+    setPendingNeo4jPatientId(null);
+    setPendingNeo4jPatientName(null);
   };
 
-  function closePatientModal() {
-    setPatientModalOpen(false);
-    setPatientModalError(null);
+  /** "Bệnh nhân đang có" chosen from the choice popup — opens the Neo4j
+   * patient search. */
+  function handleChoiceExistingPatient() {
+    setPatientChoiceModalOpen(false);
+    setExistingPatientModalOpen(true);
   }
 
-  /** Submit of the "new patient" popup — creates a minimal Patient on the
-   * live FHIR server, then remembers its id for the upcoming send. */
-  async function handleCreatePatient() {
-    const name = patientNameInput.trim();
-    if (!name || creatingPatient) return;
-    setCreatingPatient(true);
-    setPatientModalError(null);
-    try {
-      const result = await createFhirPatient(
-        name,
-        patientGenderInput || null,
-        patientBirthYearInput.trim() || null,
-      );
-      setPendingFhirPatientId(result.patient_id);
-      setPendingFhirPatientName(result.name);
-      setPatientModalOpen(false);
-    } catch (err) {
-      setPatientModalError(
-        err instanceof Error ? err.message : "Không thể tạo bệnh nhân trên FHIR server",
-      );
-    } finally {
-      setCreatingPatient(false);
+  function closeExistingPatientModal() {
+    setExistingPatientModalOpen(false);
+    setExistingPatientError(null);
+    if (existingPatientDebounceRef.current) {
+      clearTimeout(existingPatientDebounceRef.current);
+      existingPatientDebounceRef.current = null;
     }
   }
 
-  /** Doctor just wants the photo saved/analyzed without linking it to a
-   * FHIR patient this time — close the popup, leave pendingFhirPatientId
-   * empty, /skin-diagnostics/start still works fine without it. */
-  function handleSkipPatient() {
-    setPendingFhirPatientId(null);
-    setPendingFhirPatientName(null);
-    setPatientModalOpen(false);
-    setPatientModalError(null);
+  /** Debounced autocomplete against GET /patients/search (F-04/F-05). */
+  function handleExistingPatientQueryChange(value: string) {
+    setExistingPatientQuery(value);
+    if (existingPatientDebounceRef.current) clearTimeout(existingPatientDebounceRef.current);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setExistingPatientResults([]);
+      setSearchingExistingPatients(false);
+      return;
+    }
+    existingPatientDebounceRef.current = setTimeout(async () => {
+      setSearchingExistingPatients(true);
+      setExistingPatientError(null);
+      try {
+        const results = await searchExistingPatients(trimmed);
+        setExistingPatientResults(results);
+      } catch (err) {
+        setExistingPatientError(
+          err instanceof Error ? err.message : "Không thể tìm bệnh nhân",
+        );
+      } finally {
+        setSearchingExistingPatients(false);
+      }
+    }, 300);
+  }
+
+  function handleSelectExistingPatient(patient: PatientSearchResult) {
+    setPendingNeo4jPatientId(patient.id);
+    setPendingNeo4jPatientName(patient.name || patient.id);
+    setExistingPatientModalOpen(false);
+  }
+
+  /** Photo attached + existing patient chosen + no symptom text typed —
+   * the doctor just wants the photo filed under that patient's record, not
+   * a diagnosis. Saves directly via POST /skin-images/save and shows a
+   * toast; never touches the chat/conversation state, so pressing Enter in
+   * this state no longer jumps into a chat bubble with a generic
+   * placeholder message. */
+  async function saveAttachedPhotoOnly() {
+    if (!selectedFile || !pendingNeo4jPatientId || savingPhotoOnly) return;
+    const file = selectedFile;
+    const patientId = pendingNeo4jPatientId;
+    const patientName = pendingNeo4jPatientName || patientId;
+    setSavingPhotoOnly(true);
+    setError(null);
+    try {
+      await saveSkinPhotoOnly(file, patientId);
+      clearSelectedFile();
+      showSaveNotice(`Đã lưu ảnh vào hồ sơ bệnh nhân ${patientName}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể lưu ảnh vào hồ sơ bệnh nhân");
+    } finally {
+      setSavingPhotoOnly(false);
+    }
   }
 
   async function handleAuthSubmit() {
@@ -803,6 +876,15 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     const messageText = (overrideText !== undefined ? overrideText : input).trim();
     if ((!messageText && !selectedFile) || loading || !user) return;
 
+    // Photo + existing patient chosen + no symptom text -> the doctor just
+    // wants the photo filed under that patient, not a diagnosis. Handle
+    // this before the diagnostic branch below so Enter/Send doesn't jump
+    // into a chat conversation with a generic placeholder message.
+    if (selectedFile && pendingNeo4jPatientId && !messageText) {
+      await saveAttachedPhotoOnly();
+      return;
+    }
+
     // Check if an image is attached -> Trigger Skin Diagnostic Pipeline!
     if (selectedFile) {
       const file = selectedFile;
@@ -834,18 +916,18 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
 
       setMessages((prev) => [...prev, localUserMsg]);
 
-      const fhirPatientIdForRun = pendingFhirPatientId;
+      const neo4jPatientIdForRun = pendingNeo4jPatientId;
       // Consumed by this run — the next photo picked must trigger its own
-      // "new patient" popup rather than silently reusing this one.
-      setPendingFhirPatientId(null);
-      setPendingFhirPatientName(null);
+      // patient-choice popup rather than silently reusing this one.
+      setPendingNeo4jPatientId(null);
+      setPendingNeo4jPatientName(null);
 
       try {
         const startRes = await startSkinDiagnostic(
           file,
           messageText,
           activeConversationId,
-          fhirPatientIdForRun,
+          neo4jPatientIdForRun,
         );
         setActiveSkinRunId(startRes.run_id);
 
@@ -920,6 +1002,12 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
     let fullText = "";
     let toolCalls: ToolCall[] = [];
     let confirmedUserId: string | null = null;
+    // Set to true when the agent calls start_skin_diagnostic /
+    // start_diagnosis_from_patient_image so that the assistant's
+    // wrap-up text ("Tôi đã bắt đầu quá trình chẩn đoán...") is
+    // suppressed in the `done` handler — the Q&A card already
+    // renders above and that extra bubble would be confusing.
+    let skinDiagnosticStarted = false;
 
     try {
       const response = targetConversationId
@@ -948,27 +1036,60 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
-      const errorMsg = err instanceof DOMException && err.name === "AbortError"
-        ? "Hệ thống phản hồi lâu hoặc bị hủy. Vui lòng thử lại."
-        : err instanceof Error && err.message
-          ? err.message
-          : "Không thể kết nối Backend. Vui lòng kiểm tra dịch vụ.";
-      setMessages((prev) => {
-        const marked = confirmedUserId
-          ? prev
-          : prev.map((item) => item.id === localUserId ? { ...item, failed: true, pending: false } : item);
-        return [
-          ...marked,
-          {
-            id: `local-error-${crypto.randomUUID()}`,
-            conversation_id: activeConversationId ?? confirmedUserId ?? "pending",
-            role: "assistant",
-            content: `**Lỗi:** ${errorMsg}`,
-            created_at: new Date().toISOString(),
-            retryInput: messageText,
-          },
-        ];
-      });
+
+      const wasManualStop =
+        stopRequestedRef.current && err instanceof DOMException && err.name === "AbortError";
+      stopRequestedRef.current = false;
+
+      if (wasManualStop) {
+        // User clicked Stop — keep whatever had already streamed in as a
+        // normal assistant bubble (like Claude/ChatGPT), instead of
+        // discarding it and showing an error. The backend also cancels the
+        // in-flight agent task on disconnect (see chat_stream.py), so no
+        // half-finished assistant message gets persisted server-side —
+        // this bubble is local-only for this session.
+        const partialText = (fullText || textBufferRef.current).trim();
+        setMessages((prev) => {
+          const marked = confirmedUserId
+            ? prev
+            : prev.map((item) => item.id === localUserId ? { ...item, pending: false } : item);
+          if (!partialText && toolCalls.length === 0) return marked;
+          return [
+            ...marked,
+            {
+              id: `local-stopped-${crypto.randomUUID()}`,
+              conversation_id: activeConversationId ?? confirmedUserId ?? "pending",
+              role: "assistant",
+              content: partialText || "_Đã dừng phản hồi._",
+              created_at: new Date().toISOString(),
+              toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
+            },
+          ];
+        });
+      } else {
+        const errorMsg = err instanceof DOMException && err.name === "AbortError"
+          ? "Hệ thống phản hồi lâu hoặc bị hủy. Vui lòng thử lại."
+          : err instanceof Error && err.message
+            ? err.message
+            : "Không thể kết nối Backend. Vui lòng kiểm tra dịch vụ.";
+        setMessages((prev) => {
+          const marked = confirmedUserId
+            ? prev
+            : prev.map((item) => item.id === localUserId ? { ...item, failed: true, pending: false } : item);
+          return [
+            ...marked,
+            {
+              id: `local-error-${crypto.randomUUID()}`,
+              conversation_id: activeConversationId ?? confirmedUserId ?? "pending",
+              role: "assistant",
+              content: `**Lỗi:** ${errorMsg}`,
+              created_at: new Date().toISOString(),
+              retryInput: messageText,
+            },
+          ];
+        });
+      }
+
       toolCalls = toolCalls.map((tc) => tc.status === "running" ? { ...tc, status: "failed" } : tc);
       setStreamingToolCalls([]);
       setStreamingContent("");
@@ -1017,6 +1138,22 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           const graphData = isGraphData(data.graph_data) ? data.graph_data : undefined;
           if (graphData?.results?.length && onGraphUpdate) {
             onGraphUpdate(graphData);
+          }
+          const toolName = asString(data.name);
+          if (toolName === "start_skin_diagnostic" || toolName === "start_diagnosis_from_patient_image") {
+            skinDiagnosticStarted = true;
+            try {
+              const outputStr = asString(data.output_preview);
+              const outputJson = JSON.parse(outputStr);
+              if (outputJson && outputJson.status === "ok" && outputJson.data && outputJson.data.run_id) {
+                const runId = outputJson.data.run_id;
+                setActiveSkinRunId(runId);
+                setLoading(true);
+                startSkinPolling(runId);
+              }
+            } catch (e) {
+              console.error("Failed to parse tool output for skin diagnostic run_id:", e);
+            }
           }
           break;
         }
@@ -1082,7 +1219,10 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             setMessages((prev) => replaceMessage(prev, localUserId, userMessageData));
           }
 
-          if (isChatMessage(assistantMessage)) {
+          // If the agent triggered a skin-diagnostic run, its assistant
+          // wrap-up text is redundant — the Q&A card is already visible
+          // above. Suppress the message bubble entirely in that case.
+          if (isChatMessage(assistantMessage) && !skinDiagnosticStarted) {
             const finalEntities = streamingEntitiesRef.current;
             const finalPreferences = streamingPreferencesRef.current;
             const finalSkinImages = streamingSkinImagesRef.current;
@@ -1226,6 +1366,25 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
 
   return (
     <>
+    {saveNotice && (
+      <Box
+        position="fixed"
+        top={4}
+        right={4}
+        zIndex={2000}
+        bg="#10a37f"
+        color="white"
+        px={4}
+        py={2.5}
+        borderRadius="lg"
+        shadow="lg"
+      >
+        <HStack gap={2}>
+          <CheckCircle2 size={16} />
+          <Text fontSize="sm" fontWeight="medium">{saveNotice}</Text>
+        </HStack>
+      </Box>
+    )}
     <Flex h="100vh" w="100vw" overflow="hidden" bg="white">
       {/* Left Sidebar */}
       {sidebarOpen && (
@@ -1368,11 +1527,19 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             </Flex>
           ) : (
             <VStack gap={4} align="stretch" maxW="800px" mx="auto">
-              {messages.map((msg) => (
-                <Box key={msg.id}>
-                  {/* User Message */}
-                  {msg.role === "user" ? (
-                    <Flex justify="flex-end" mb={2}>
+              {messages.map((msg) => {
+                const isStartDiagnosticPlaceholder = msg.role === "assistant" && (
+                  msg.content?.includes("bắt đầu quy trình chẩn đoán") ||
+                  msg.content?.includes("quy trình chẩn đoán hình ảnh") ||
+                  msg.content?.includes("phân tích hình ảnh và phỏng vấn lâm sàng")
+                );
+                if (isStartDiagnosticPlaceholder) return null;
+
+                return (
+                  <Box key={msg.id}>
+                    {/* User Message */}
+                    {msg.role === "user" ? (
+                      <Flex justify="flex-end" mb={2}>
                       <Box
                         bg="#10a37f"
                         color="white"
@@ -1607,7 +1774,8 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                     </Flex>
                   )}
                 </Box>
-              ))}
+              );
+            })}
 
               {/* Running Status / Typing Indicator — intentionally just the
                   three dots, like ChatGPT/Claude's "thinking" state. No
@@ -1670,18 +1838,18 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                         <X size={10} />
                       </IconButton>
                     </Box>
-                    {pendingFhirPatientId ? (
-                      <Badge colorPalette="green" borderRadius="full" px={2} py={1} fontSize="xs">
-                        Bệnh nhân: {pendingFhirPatientName} (ID {pendingFhirPatientId})
+                    {pendingNeo4jPatientId ? (
+                      <Badge colorPalette="blue" borderRadius="full" px={2} py={1} fontSize="xs">
+                        Bệnh nhân đang có: {pendingNeo4jPatientName} (ID {pendingNeo4jPatientId})
                       </Badge>
                     ) : (
                       <Button
                         size="2xs"
                         variant="outline"
                         borderRadius="full"
-                        onClick={() => setPatientModalOpen(true)}
+                        onClick={() => setPatientChoiceModalOpen(true)}
                       >
-                        + Gán bệnh nhân FHIR
+                        + Chọn bệnh nhân
                       </Button>
                     )}
                   </Flex>
@@ -1727,18 +1895,41 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                   style={{ maxHeight: "160px" }}
                 />
 
-                {/* Send Button */}
+                {/* Save-to-record icon button — appears next to the send
+                    button once a photo is attached and an existing patient
+                    has been chosen (same visibility condition as before),
+                    replacing the old "Lưu vào hồ sơ" text button. */}
+                {filePreview && pendingNeo4jPatientId && (
+                  <IconButton
+                    aria-label="Lưu vào hồ sơ"
+                    title="Lưu vào hồ sơ"
+                    size="xs"
+                    variant="ghost"
+                    borderRadius="full"
+                    color="#10a37f"
+                    _hover={{ bg: "green.50" }}
+                    loading={savingPhotoOnly}
+                    onClick={saveAttachedPhotoOnly}
+                    disabled={loading}
+                  >
+                    <Save size={18} />
+                  </IconButton>
+                )}
+
+                {/* Send / Stop Button — while a response is streaming this
+                    becomes a Stop button (like Claude/ChatGPT), instead of
+                    just a disabled spinner. */}
                 <IconButton
-                  aria-label="Gửi"
+                  aria-label={loading ? "Dừng" : "Gửi"}
                   size="xs"
-                  bg="#10a37f"
+                  bg={loading ? "gray.700" : "#10a37f"}
                   color="white"
-                  _hover={{ bg: "#0d8c6d" }}
+                  _hover={{ bg: loading ? "gray.900" : "#0d8c6d" }}
                   borderRadius="full"
-                  onClick={() => sendMessage()}
-                  disabled={(!input.trim() && !selectedFile) || loading}
+                  onClick={loading ? handleStopGeneration : () => sendMessage()}
+                  disabled={!loading && !input.trim() && !selectedFile}
                 >
-                  {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={14} />}
+                  {loading ? <Square size={12} fill="white" /> : <Send size={14} />}
                 </IconButton>
               </Flex>
             </Box>
@@ -1747,11 +1938,9 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
       </Flex>
     </Flex>
 
-    {/* "New patient" popup — pops up right after a photo is picked so the
-        doctor can create a minimal Patient on the FHIR server before the
-        run kicks off. Plain fixed-position overlay (no Chakra Dialog
-        dependency) so it stays simple and self-contained. */}
-    {patientModalOpen && (
+    {/* Existing-patient choice popup — shown right after a photo is picked,
+        before the existing-patient search popup (F-07). */}
+    {patientChoiceModalOpen && (
       <Box
         position="fixed"
         inset={0}
@@ -1760,7 +1949,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
         display="flex"
         alignItems="center"
         justifyContent="center"
-        onClick={() => (creatingPatient ? null : closePatientModal())}
+        onClick={() => setPatientChoiceModalOpen(false)}
       >
         <Box
           bg="white"
@@ -1771,75 +1960,114 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           maxW="90vw"
           onClick={(e) => e.stopPropagation()}
         >
-          <Heading size="sm" mb={1}>Tạo bệnh nhân mới</Heading>
-          <Text fontSize="xs" color="gray.500" mb={4}>
-            Ảnh da liễu sẽ được lưu vào FHIR server và gắn với bệnh nhân này (ImagingStudy).
-          </Text>
-
-          <VStack gap={3} align="stretch">
-            <Box>
-              <Text fontSize="xs" mb={1} color="gray.600">Họ và tên *</Text>
-              <Input
-                size="sm"
-                placeholder="Ví dụ: Nguyễn Nam Vũ"
-                value={patientNameInput}
-                onChange={(e) => setPatientNameInput(e.target.value)}
-                autoFocus
-              />
-            </Box>
-            <HStack gap={2}>
-              <Box flex={1}>
-                <Text fontSize="xs" mb={1} color="gray.600">Giới tính</Text>
-                <select
-                  value={patientGenderInput}
-                  onChange={(e) => setPatientGenderInput(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    borderRadius: "6px",
-                    border: "1px solid #E2E8F0",
-                    fontSize: "13px",
-                  }}
-                >
-                  <option value="">— Không rõ —</option>
-                  <option value="male">Nam</option>
-                  <option value="female">Nữ</option>
-                  <option value="other">Khác</option>
-                  <option value="unknown">Không rõ</option>
-                </select>
-              </Box>
-              <Box flex={1}>
-                <Text fontSize="xs" mb={1} color="gray.600">Năm sinh</Text>
-                <Input
-                  size="sm"
-                  placeholder="1990"
-                  maxLength={4}
-                  value={patientBirthYearInput}
-                  onChange={(e) => setPatientBirthYearInput(e.target.value.replace(/[^0-9]/g, ""))}
-                />
-              </Box>
-            </HStack>
-
-            {patientModalError && (
-              <Text fontSize="xs" color="red.500">{patientModalError}</Text>
-            )}
-
-            <HStack justify="flex-end" gap={2} pt={1}>
-              <Button size="sm" variant="ghost" onClick={handleSkipPatient} disabled={creatingPatient}>
-                Bỏ qua
-              </Button>
-              <Button
-                size="sm"
-                bg="#10a37f"
-                color="white"
-                _hover={{ bg: "#0d8c6d" }}
-                onClick={handleCreatePatient}
-                disabled={!patientNameInput.trim() || creatingPatient}
-              >
-                {creatingPatient ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : "Tạo bệnh nhân"}
-              </Button>
-            </HStack>
+          <Heading size="sm" mb={1}>Ảnh này có gắn với bệnh nhân nào không?</Heading>
+          <VStack gap={2} align="stretch">
+            <Button
+              size="sm"
+              bg="#10a37f"
+              color="white"
+              _hover={{ bg: "#0d8c6d" }}
+              onClick={handleChoiceExistingPatient}
+            >
+              Bệnh nhân đang có
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              color="gray.500"
+              onClick={() => setPatientChoiceModalOpen(false)}
+            >
+              Bỏ qua (không lưu vào hồ sơ)
+            </Button>
           </VStack>
+        </Box>
+      </Box>
+    )}
+
+    {/* "Bệnh nhân đang có" (luong B) — autocomplete search against the
+        Neo4j graph (GET /patients/search, F-04/F-05, F-08). Selecting a
+        result sets pendingNeo4jPatientId, consumed by sendMessage(). */}
+    {existingPatientModalOpen && (
+      <Box
+        position="fixed"
+        inset={0}
+        bg="blackAlpha.500"
+        zIndex={1000}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        onClick={closeExistingPatientModal}
+      >
+        <Box
+          bg="white"
+          borderRadius="xl"
+          shadow="lg"
+          p={5}
+          w="380px"
+          maxW="90vw"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Heading size="sm" mb={1}>Tìm bệnh nhân đang có</Heading>
+          <Input
+            size="sm"
+            placeholder="Nhập tên hoặc ID bệnh nhân..."
+            value={existingPatientQuery}
+            onChange={(e) => handleExistingPatientQueryChange(e.target.value)}
+            autoFocus
+            mb={3}
+          />
+
+          <Box maxH="240px" overflowY="auto">
+            {searchingExistingPatients ? (
+              <Flex justify="center" py={4}>
+                <Spinner size="sm" color="gray.400" />
+              </Flex>
+            ) : existingPatientError ? (
+              <Text fontSize="xs" color="red.500" py={2}>{existingPatientError}</Text>
+            ) : existingPatientResults.length === 0 ? (
+              <Text fontSize="xs" color="gray.400" textAlign="center" py={4}>
+                {existingPatientQuery.trim() ? "Không tìm thấy bệnh nhân" : "Nhập tên để tìm kiếm"}
+              </Text>
+            ) : (
+              <VStack align="stretch" gap={1}>
+                {existingPatientResults.map((patient) => (
+                  <Box
+                    key={patient.id}
+                    px={3}
+                    py={2}
+                    borderRadius="md"
+                    borderWidth="1px"
+                    borderColor="gray.200"
+                    cursor="pointer"
+                    _hover={{ bg: "gray.50", borderColor: "gray.300" }}
+                    onClick={() => handleSelectExistingPatient(patient)}
+                  >
+                    <Text fontSize="sm" fontWeight="medium">{patient.name || "(không rõ tên)"}</Text>
+                    <Text fontSize="2xs" color="gray.500">
+                      ID {patient.id}
+                      {patient.birth_date ? ` · Sinh ${patient.birth_date}` : ""}
+                    </Text>
+                  </Box>
+                ))}
+              </VStack>
+            )}
+          </Box>
+
+          <HStack justify="space-between" pt={3}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setExistingPatientModalOpen(false);
+                setPatientChoiceModalOpen(true);
+              }}
+            >
+              ← Quay lại
+            </Button>
+            <Button size="sm" variant="ghost" color="gray.500" onClick={closeExistingPatientModal}>
+              Đóng
+            </Button>
+          </HStack>
         </Box>
       </Box>
     )}

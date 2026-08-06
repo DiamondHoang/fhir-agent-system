@@ -43,6 +43,10 @@ class SkinDiagnosticRun:
     fhir_patient_id: str = ""
     fhir_study_id: str = ""
     fhir_binary_id: str = ""
+    # Set when this run's photo/diagnosis is about a Patient that already
+    # exists in the Neo4j graph (luong B — CyFHIR), as opposed to a brand
+    # new HAPI Patient created for luong A. Empty when not applicable.
+    neo4j_patient_id: str = ""
     # Links this run to a real Conversation/Message row in Postgres so the
     # diagnostic exchange shows up as a titled conversation in the sidebar
     # instead of only living in this in-memory/JSON-snapshot run store.
@@ -104,6 +108,7 @@ class SkinDiagnosticStore:
         conversation_id: str = "",
         run_id: str | None = None,
         fhir_patient_id: str = "",
+        neo4j_patient_id: str = "",
     ) -> SkinDiagnosticRun:
         async with self._lock:
             run = SkinDiagnosticRun(
@@ -114,6 +119,7 @@ class SkinDiagnosticStore:
                 anamnesis=anamnesis,
                 conversation_id=conversation_id,
                 fhir_patient_id=fhir_patient_id,
+                neo4j_patient_id=neo4j_patient_id,
             )
             self._runs[run.id] = run
             self._persist(run)

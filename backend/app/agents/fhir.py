@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import contextvars
@@ -22,6 +22,11 @@ from pydantic_ai.usage import UsageLimits
 
 from app.graph.client import execute_cypher, get_collector, get_schema
 from app.services.long_term_memory import save_conversation_memory, search_memories
+from app.skin_diagnostic.service import start_skin_diagnostic_from_binary
+from app.skin_images.neo4j_repository import search_patient_skin_images
+from app.skin_images.schemas import SkinImageSearchFilters, SkinImageSummary
+from app.skin_images.search_filters import resolve_skin_image_filters
+from app.skin_images.service import to_frontend_skin_image_result
 
 
 SYSTEM_PROMPT = """
@@ -61,17 +66,41 @@ before calling anything:
    The user is asking you to diagnose, assess, or report on a skin lesion,
    rash, or other dermatological complaint (e.g. "bệnh nhân bị ngứa, hãy
    chẩn đoán bệnh").
-   -> Call diagnose_skin_condition first. Diagnosis in this system is
-      image-based: it runs a dedicated vision + clinical-interview pipeline
-      that only starts once the user attaches a photo in the chat composer.
-      You cannot diagnose from a text description alone and must not guess a
-      diagnosis yourself — report what diagnose_skin_condition returns
-      (an existing result, an in-progress run, or instructions to attach a
-      photo) and relay that to the user.
-      A skin diagnosis result is about the uploaded photo only — it is NOT
-      automatically linked to any named patient. If the request that
-      triggered it did not name a patient, treat that result as belonging
-      to an unidentified/unnamed subject.
+
+   First decide WHOSE photo is being diagnosed:
+
+   a) A NAMED PATIENT (not "I"/the current chat user) is the subject —
+      either named in this same message (e.g. "lấy ảnh gần nhất của Nam
+      Vũ, bệnh nhân nổi mảng trắng, hãy chẩn đoán"), OR named earlier in
+      this same conversation and the current message is a follow-up about
+      that same patient's symptoms (e.g. a prior turn already looked up
+      "Nam Vũ"'s photo, and this turn just says "bệnh nhân nổi nhiều mảng
+      trắng, hãy chẩn đoán bệnh" with no new photo attached).
+      -> Use start_diagnosis_from_patient_image (or find_patient_skin_images
+         + start_skin_diagnostic if the patient's photo lives in the Neo4j
+         graph) to resolve and diagnose that named patient's most recent
+         photo. If a binary_id for this patient was already found earlier
+         in this same conversation, reuse it directly instead of looking it
+         up again (see REUSE FIRST later in this prompt) — do not call
+         diagnose_skin_condition for a named patient, since that tool only
+         ever reports on the current chat user's own uploaded photo and
+         will incorrectly say no photo was attached.
+
+   b) The subject is the current chat user's OWN just-uploaded photo in
+      this chat (no other patient named or implied), or the user is asking
+      about the status/result of a diagnosis already running for them.
+      -> Call diagnose_skin_condition. Diagnosis in this system is
+         image-based: it runs a dedicated vision + clinical-interview
+         pipeline that only starts once the user attaches a photo in the
+         chat composer. You cannot diagnose from a text description alone
+         and must not guess a diagnosis yourself — report what
+         diagnose_skin_condition returns (an existing result, an
+         in-progress run, or instructions to attach a photo) and relay
+         that to the user.
+         A skin diagnosis result from this path is about the uploaded
+         photo only — it is NOT automatically linked to any named patient.
+         If the request that triggered it did not name a patient, treat
+         that result as belonging to an unidentified/unnamed subject.
 
 IDENTITY GUARD — do not let a recent skin diagnosis leak onto a different,
 named patient. If the current request asks about a specific patient by
@@ -237,6 +266,10 @@ Always:
 - treat a tool name and its complete argument set as one unique call;
 - reuse the existing result instead of calling the same tool again with the
   same or equivalent arguments during the current request.
+- for get_resource_field and get_resource_fields_batch, pass one field name or
+  comma-separated field names in field_name when multiple known fields are
+  needed from the same resource scope, instead of calling the tool once per
+  field.
 
 Never:
 
@@ -287,6 +320,45 @@ Never infer beyond retrieved evidence.
 
 
 ==================================================
+SKIN IMAGE RETRIEVAL (photos are stored in the local Neo4j graph)
+==================================================
+
+Saved dermatology photos are stored directly in the local Neo4j graph (as FHIR
+Binary, Media, and DiagnosticReport nodes connected to Patients).
+
+Use `search_skin_images` or `find_patient_skin_images` to search and retrieve
+past skin photos for a patient.
+
+For latest/gần nhất, use count=1 and sort=desc. For a specific number, pass
+that count. For all/toàn bộ/tất cả, set all_images=true.
+
+Never invent binary_id, view_url, or any photo metadata; never query
+Binary.data directly; never ignore the tool result.
+
+
+==================================================
+SKIN DIAGNOSTIC ROUTING (saved Neo4j Patient photos)
+==================================================
+
+Choose the correct dermatology capability for diagnosis:
+
+- The user's own just-uploaded photo in this chat, with no other patient
+  named or implied -> diagnose_skin_condition.
+- A specific already-saved patient photo by name and symptom ->
+  start_diagnosis_from_patient_image (or start_skin_diagnostic if binary_id
+  is already known).
+
+REUSE FIRST — if a binary_id for this patient's photo already appears
+anywhere earlier in this same conversation, do NOT search for or display it
+again. Call start_skin_diagnostic directly with that binary_id.
+
+Do not diagnose yourself in words from a text description alone —
+dermatology diagnosis in this system is always image-based, through one of
+the tools above. Never request, echo, or store Base64 image bytes or
+Binary.data in model context or in your reply.
+
+
+==================================================
 FINAL RESPONSE
 ==================================================
 
@@ -329,6 +401,7 @@ class AgentDeps:
 
     session_id: str
     user_id: str
+    active_patient_id: str = ""
 
 
 internal_llm_client = AsyncOpenAI(
@@ -434,6 +507,16 @@ def _parse_ids(resource_ids: str) -> list[str]:
         dict.fromkeys(
             item.strip()
             for item in resource_ids.split(",")
+            if item.strip()
+        )
+    )
+
+
+def _parse_field_names(field_name: str) -> list[str]:
+    return list(
+        dict.fromkeys(
+            item.strip()
+            for item in field_name.split(",")
             if item.strip()
         )
     )
@@ -1179,14 +1262,14 @@ async def get_resource_field(
     ],
     field_name: Annotated[
         str,
-        Field(description="Exact field relationship name or root property name to read, such as code, subject, status, or valueQuantity."),
+        Field(description="Exact field relationship/root property name to read. Pass one name or comma-separated names, such as code,valueQuantity,effectiveDateTime."),
     ],
 ) -> str:
     """
-    Read one named root property or internal FHIR field from one resource.
+    Read one or more named root properties or internal FHIR fields from one resource.
 
     Use when:
-    - You know the field_name needed for one FHIRResource.
+    - You know the field_name or comma-separated field names needed for one FHIRResource.
     - A shallow field listing showed a relevant field that needs more detail.
 
     Do not use when:
@@ -1195,30 +1278,41 @@ async def get_resource_field(
     - You need to resolve a Reference target or Coding meaning; prefer resolve_reference or resolve_coding.
 
     Behavior:
-    - Reads a matching root property or paths starting with the named field up to 2 internal hops.
+    - Reads matching root properties or paths starting with each requested field up to 2 internal hops.
     - Does not traverse RESOLVES_TO, DEFINED_BY, blocked relationships, or into another FHIRResource.
 
     Returns:
-        str: JSON payload with field values containing source, node_id, path, labels,
-        properties, and has_children.
+        str: JSON payload with one row per requested field containing field_found
+        and values with source, node_id, path, labels, properties, and has_children.
     """
+    field_names = _parse_field_names(field_name)
+    if not field_names:
+        return _json_response(
+            status="error",
+            count=0,
+            data=[],
+            message="field_name must contain at least one field",
+        )
 
     cypher = """
-    MATCH (resource:FHIRResource {
+    OPTIONAL MATCH (resource:FHIRResource {
         resourceType: $resource_type,
         id: $resource_id
     })
 
-    CALL {
-        WITH resource
+    UNWIND $field_names AS requested_field
 
-        WITH resource, resource[$field_name] AS root_value
-        WHERE root_value IS NOT NULL
+    CALL {
+        WITH resource, requested_field
+
+        WITH resource, requested_field, resource[requested_field] AS root_value
+        WHERE resource IS NOT NULL
+          AND root_value IS NOT NULL
 
         RETURN {
             source: 'root_property',
             node_id: null,
-            path: [$field_name],
+            path: [requested_field],
             labels: labels(resource),
             properties: {value: root_value},
             has_children: false
@@ -1226,11 +1320,12 @@ async def get_resource_field(
 
         UNION
 
-        WITH resource
+        WITH resource, requested_field
         MATCH path=
             (resource)-[first]->(field_node)-[*0..2]->(value_node)
 
-        WHERE type(first) = $field_name
+        WHERE resource IS NOT NULL
+          AND type(first) = requested_field
           AND all(
               relationship IN relationships(path)
               WHERE NOT type(relationship) IN $blocked_relationships
@@ -1257,9 +1352,33 @@ async def get_resource_field(
                     | 1
                 ]) > 0
         } AS value
+
+        UNION
+
+        WITH resource, requested_field
+        RETURN null AS value
     }
 
-    RETURN value
+    WITH requested_field,
+         resource IS NOT NULL AS resource_found,
+         collect(value) AS raw_values
+
+    RETURN requested_field AS field_name,
+           resource_found,
+           size([value IN raw_values WHERE value IS NOT NULL]) > 0 AS field_found,
+           [
+               value IN raw_values
+               WHERE value IS NOT NULL |
+               {
+                   source: value.source,
+                   node_id: value.node_id,
+                   path: value.path,
+                   labels: value.labels,
+                   properties: value.properties,
+                   has_children: value.has_children
+               }
+           ] AS values
+    ORDER BY field_name
     """
 
     return await _execute_tool(
@@ -1268,7 +1387,7 @@ async def get_resource_field(
         parameters={
             "resource_type": resource_type,
             "resource_id": resource_id,
-            "field_name": field_name,
+            "field_names": field_names,
             "blocked_relationships": list(
                 _BLOCKED_TRAVERSAL_RELATIONSHIPS
             ),
@@ -1288,35 +1407,36 @@ async def get_resource_fields_batch(
     ],
     field_name: Annotated[
         str,
-        Field(description="Exact field relationship name or root property name to read across all requested resources."),
+        Field(description="Exact field relationship/root property name to read across all requested resources. Pass one name or comma-separated names."),
     ],
 ) -> str:
     """
-    Read one named root property or internal FHIR field from multiple resources.
+    Read one or more named root properties or internal FHIR fields from multiple resources.
 
     Use when:
-    - You need the same field_name from several FHIRResources of one resourceType.
-    - You want one batch call instead of repeated get_resource_field calls.
+    - You need one or more field names from several FHIRResources of one resourceType.
+    - You want one batch call instead of repeated get_resource_field/get_resource_fields_batch calls.
 
     Do not use when:
     - You only need a shallow field overview; prefer list_resource_fields_batch.
-    - You need different field names for different resources.
     - You need to resolve Reference targets or Coding meanings; prefer resolve_reference or resolve_coding.
 
     Behavior:
     - Parses resource_ids from comma-separated text.
-    - Reads matching root properties or paths starting with field_name up to 2 internal hops.
+    - Parses field_name from comma-separated text.
+    - Reads matching root properties or paths starting with each requested field up to 2 internal hops.
     - Does not traverse RESOLVES_TO, DEFINED_BY, blocked relationships, or into another FHIRResource.
-    - Groups all matching values by requested resource id to reduce repeated metadata.
+    - Groups matching values by requested resource id and field name.
 
     Returns:
         str: JSON payload with one row per requested resource id containing
-        resource_found, field_found, and compact values with source, path, and
+        resource_found, field_found, and fields with source, path, and
         properties. Use get_resource_field when node ids or expansion metadata
         are required for one resource.
     """
 
     ids = _parse_ids(resource_ids)
+    field_names = _parse_field_names(field_name)
 
     if not ids:
         return _json_response(
@@ -1324,6 +1444,13 @@ async def get_resource_fields_batch(
             count=0,
             data=[],
             message="resource_ids must contain at least one id",
+        )
+    if not field_names:
+        return _json_response(
+            status="error",
+            count=0,
+            data=[],
+            message="field_name must contain at least one field",
         )
 
     cypher = """
@@ -1334,22 +1461,24 @@ async def get_resource_fields_batch(
         id: requested_id
     })
 
+    UNWIND $field_names AS requested_field
+
     CALL {
-        WITH requested_id, resource
+        WITH requested_id, requested_field, resource
 
         WITH requested_id,
+             requested_field,
              resource,
-             resource[$field_name] AS root_value
+             resource[requested_field] AS root_value
         WHERE resource IS NOT NULL
           AND root_value IS NOT NULL
 
         RETURN requested_id AS resource_id,
-               true AS resource_found,
-               true AS field_found,
+               requested_field AS field_name,
                {
                    source: 'root_property',
                    node_id: null,
-                   path: [$field_name],
+                   path: [requested_field],
                    labels: labels(resource),
                    properties: {value: root_value},
                    has_children: false
@@ -1357,12 +1486,13 @@ async def get_resource_fields_batch(
 
         UNION
 
-        WITH requested_id, resource
+        WITH requested_id, requested_field, resource
 
         MATCH path=
             (resource)-[first]->(field_node)-[*0..2]->(value_node)
 
-        WHERE type(first) = $field_name
+        WHERE resource IS NOT NULL
+          AND type(first) = requested_field
           AND all(
               relationship IN relationships(path)
               WHERE NOT type(relationship) IN $blocked_relationships
@@ -1373,8 +1503,7 @@ async def get_resource_fields_batch(
           )
 
         RETURN requested_id AS resource_id,
-               true AS resource_found,
-               true AS field_found,
+               requested_field AS field_name,
                {
                    source: 'child_node',
                    node_id: toString(id(value_node)),
@@ -1395,50 +1524,21 @@ async def get_resource_fields_batch(
 
         UNION
 
-        WITH requested_id, resource
-
-        OPTIONAL MATCH path=
-            (resource)-[first]->(field_node)-[*0..2]->(value_node)
-
-        WHERE path IS NULL
-           OR (
-               type(first) = $field_name
-               AND all(
-                   relationship IN relationships(path)
-                   WHERE NOT type(relationship) IN $blocked_relationships
-               )
-               AND all(
-                   path_node IN nodes(path)[1..]
-                   WHERE NOT path_node:FHIRResource
-               )
-           )
-
-        WITH requested_id,
-             resource,
-             resource[$field_name] AS root_value,
-             count(value_node) AS child_value_count
-
-        WHERE resource IS NULL
-           OR (
-               root_value IS NULL
-               AND child_value_count = 0
-           )
-
+        WITH requested_id, requested_field, resource
         RETURN requested_id AS resource_id,
-               resource IS NOT NULL AS resource_found,
-               false AS field_found,
+               requested_field AS field_name,
                null AS value
     }
 
     WITH resource_id,
-         resource_found,
-         field_found,
+         field_name,
+         resource IS NOT NULL AS resource_found,
          collect(value) AS raw_values
 
-    RETURN resource_id,
-           resource_found,
-           field_found,
-           [
+    WITH resource_id,
+         resource_found,
+         field_name,
+         [
                value IN raw_values
                WHERE value IS NOT NULL |
                {
@@ -1447,6 +1547,19 @@ async def get_resource_fields_batch(
                    properties: value.properties
                }
            ] AS values
+
+    WITH resource_id,
+         resource_found,
+         collect({
+             field_name: field_name,
+             field_found: size(values) > 0,
+             values: values
+         }) AS fields
+
+    RETURN resource_id,
+           resource_found,
+           any(field IN fields WHERE field.field_found) AS field_found,
+           fields
     ORDER BY resource_id
     """
 
@@ -1456,7 +1569,7 @@ async def get_resource_fields_batch(
         parameters={
             "resource_type": resource_type,
             "resource_ids": ids,
-            "field_name": field_name,
+            "field_names": field_names,
             "blocked_relationships": list(
                 _BLOCKED_TRAVERSAL_RELATIONSHIPS
             ),
@@ -1686,6 +1799,325 @@ async def get_graph_schema(ctx: RunContext[AgentDeps]) -> str:
         return model_content
 
 
+async def _resolve_neo4j_patient_name(patient_id: str) -> str | None:
+    """Best-effort Patient.name lookup for the luong B (Neo4j) skin-image
+    tools — search_patient_skin_images() only returns ids, not names, so the
+    agent tool resolves the name itself before shaping the frontend result.
+    """
+    try:
+        rows = await execute_cypher(
+            """
+            MATCH (patient:FHIRResource:Patient {id: $patient_id})
+            OPTIONAL MATCH (patient)-[:name]->(name)
+            RETURN coalesce(name.text, name.family) AS patient_name
+            LIMIT 1
+            """,
+            {"patient_id": patient_id},
+            collect=False,
+        )
+    except Exception:
+        return None
+    if rows and rows[0].get("patient_name"):
+        return str(rows[0]["patient_name"])
+    return None
+
+
+async def _resolve_patient_id_if_name(value: str) -> str:
+    """Defensive fallback for find_patient_skin_images: the model is
+    instructed to always pass the FHIR resource id, not the patient's name,
+    but occasionally passes the name anyway. Rather than silently returning
+    an empty photo list in that case (which reads to the doctor as "no
+    photo exists"), try the value as an exact Patient.id first and only
+    fall back to a name search — and only substitute the id when the name
+    search matches exactly one patient, to avoid guessing between multiple
+    same-name patients.
+    """
+    try:
+        exact = await execute_cypher(
+            """
+            MATCH (patient:FHIRResource:Patient {id: $value})
+            RETURN patient.id AS id
+            LIMIT 1
+            """,
+            {"value": value},
+            collect=False,
+        )
+        if exact:
+            return value
+
+        by_name = await execute_cypher(
+            """
+            MATCH (patient:FHIRResource:Patient)-[:name]->(name)
+            WHERE toLower(coalesce(name.text, '')) CONTAINS toLower($value)
+               OR toLower(coalesce(name.family, '')) CONTAINS toLower($value)
+               OR any(given IN coalesce(name.given, [])
+                      WHERE toLower(given) CONTAINS toLower($value))
+            RETURN DISTINCT patient.id AS id
+            LIMIT 2
+            """,
+            {"value": value},
+            collect=False,
+        )
+        if len(by_name) == 1:
+            logger.info(
+                "find_patient_skin_images: patient_id %r looked like a name; "
+                "resolved to Patient.id %r",
+                value, by_name[0]["id"],
+            )
+            return str(by_name[0]["id"])
+    except Exception:
+        logger.exception("Failed to resolve patient_id fallback for %r", value)
+    return value
+
+
+@agent.tool
+async def find_patient_skin_images(
+    ctx: RunContext[AgentDeps],
+    patient_id: Annotated[
+        str | None,
+        Field(description="The FHIR resource id (e.g. '10796') from search_patient — NEVER the patient's name text. Explicitly selected/resolved by the doctor's name. Omit only when active patient context is available."),
+    ] = None,
+    count: Annotated[
+        int | None,
+        Field(description="Optional number of images to return. Use the doctor's requested number. Omit when all_images is true."),
+    ] = 5,
+    all_images: Annotated[
+        bool,
+        Field(description="Set true when the doctor asks for all/toàn bộ/tất cả matching images."),
+    ] = False,
+    sort: Annotated[
+        str,
+        Field(description="Sort by image timestamp: desc for latest/newest, asc for oldest."),
+    ] = "desc",
+    date_range: Annotated[
+        str | None,
+        Field(description="Optional relative date range: today, yesterday, this_week, last_week, this_month, last_month, this_year, last_year, recent."),
+    ] = None,
+    specific_date: Annotated[
+        str | None,
+        Field(description="Optional exact date, either YYYY-MM-DD or DD/MM/YYYY."),
+    ] = None,
+    modality: Annotated[
+        str | None,
+        Field(description="Optional modality code. Use XC for dermatology images; omit only when intentionally searching all modalities."),
+    ] = "XC",
+) -> str:
+    """
+    Retrieve skin/dermatology photos saved for an existing Patient in the local Neo4j FHIR graph.
+
+    Use when:
+    - The doctor asks to view, retrieve, list, compare, or find skin/lesion
+      photos already saved for a known Neo4j Patient.
+
+    Do not use when:
+    - The user means their own just-uploaded photo in this chat; use
+      diagnose_skin_condition instead.
+
+    Behavior:
+    - Resolves Patient from explicit patient_id, then active patient context.
+    - Queries Neo4j directly through the CyFHIR graph shape.
+    - Returns metadata only and never returns Binary.data or base64.
+
+    IMPORTANT — the UI renders the matched photo(s) inline automatically as
+    real thumbnails the moment this tool returns a non-empty list; do not
+    put view_url/binary links or raw URLs in your reply.
+
+    Returns:
+        str: JSON payload with a list of {study_id, patient_id,
+        patient_name, binary_id, last_updated, view_url}. Empty list if no
+        patient or no photo matched.
+    """
+    logger.info(
+        "TOOL START | tool=find_patient_skin_images | patient_id=%r count=%r all_images=%r",
+        patient_id, count, all_images,
+    )
+    resolved_patient_id = (patient_id or ctx.deps.active_patient_id or "").strip()
+    if not resolved_patient_id:
+        return _json_response(
+            status="patient_required",
+            count=0,
+            data=[],
+            message="Please ask the doctor to provide or select a Patient ID before retrieving skin images.",
+        )
+    resolved_patient_id = await _resolve_patient_id_if_name(resolved_patient_id)
+
+    normalized_sort = "asc" if str(sort).strip().lower() == "asc" else "desc"
+    requested_count = None if all_images else max(int(count or 5), 1)
+
+    try:
+        filters = resolve_skin_image_filters(
+            SkinImageSearchFilters(
+                patient_id=resolved_patient_id,
+                count=requested_count,
+                sort=normalized_sort,
+                date_range=date_range,
+                specific_date=specific_date,
+                modality=modality or None,
+            )
+        )
+        rows = await search_patient_skin_images(filters)
+    except Exception as exc:
+        model_content = _json_response(status="error", count=0, data=[], message=str(exc))
+        _record_tool_result_chars(len(model_content))
+        return model_content
+
+    patient_name = await _resolve_neo4j_patient_name(resolved_patient_id)
+
+    # Defense-in-depth: dedupe by binary_id even though the underlying
+    # Cypher (search_patient_skin_images) is expected to return at most one
+    # row per photo now — keeps a stray duplicate row from ever reaching
+    # the doctor as two copies of the same image.
+    seen_binary_ids: set[str] = set()
+    deduped_rows: list[dict[str, Any]] = []
+    for row in rows:
+        binary_id = str(row.get("binary_id") or "").strip()
+        if not binary_id or binary_id in seen_binary_ids:
+            continue
+        seen_binary_ids.add(binary_id)
+        deduped_rows.append(row)
+
+    results = [
+        to_frontend_skin_image_result(row, patient_name=patient_name)
+        for row in deduped_rows
+    ]
+
+    # Same mechanism as search_skin_images (luong A): push the actual photos
+    # to the UI as a dedicated SSE event so the frontend renders real <img>
+    # thumbnails instead of a raw, auth-requiring URL the user can't open.
+    get_collector().emit_skin_images(results)
+
+    model_content = _json_response(
+        status="ok",
+        count=len(results),
+        data=results,
+        message=None if results else "No matching skin images were found.",
+    )
+    _record_tool_result_chars(len(model_content))
+    logger.info("TOOL END | tool=find_patient_skin_images | chars=%s", len(model_content))
+    return model_content
+
+
+@agent.tool
+async def start_skin_diagnostic(
+    ctx: RunContext[AgentDeps],
+    patient_id: Annotated[
+        str,
+        Field(description="Neo4j FHIR Patient id that the binary_id belongs to."),
+    ],
+    binary_id: Annotated[
+        str,
+        Field(description="Binary id of a skin photo already saved in the Neo4j graph (e.g. from find_patient_skin_images). Required; never guess it."),
+    ],
+    initial_complaint: Annotated[
+        str,
+        Field(description="The doctor's current message copied exactly, without rewriting."),
+    ],
+) -> str:
+    """
+    Start the dermatology diagnostic pipeline (vision + clinical-interview)
+    on a photo already saved for an existing Patient in the Neo4j FHIR graph
+    (luong B). Separate from start_diagnosis_from_patient_image, which reads
+    the live HAPI FHIR server (luong A), and from diagnose_skin_condition,
+    which only checks a run already started from a chat-uploaded photo.
+
+    Use when:
+    - The doctor asks for diagnosis/assessment/analysis of a specific saved
+      photo (binary_id known, e.g. from find_patient_skin_images or a prior
+      turn in this conversation) belonging to a known Patient.
+
+    Do not use when:
+    - No binary_id is known yet — call find_patient_skin_images first, or
+      ask the doctor which photo.
+    - The user means their own just-uploaded photo in this chat; use
+      diagnose_skin_condition instead.
+
+    Behavior:
+    - Reads Binary.data inside the backend service only, never into model
+      context.
+    - Creates a diagnostic run and starts the same multi-step vision +
+      clinical-interview pipeline used elsewhere. This takes time and may
+      pause for clinical Q&A shown in the chat UI.
+
+    Returns:
+        str: JSON payload with status "started" and run_id on success — call
+        diagnose_skin_condition afterward to check progress/get the result;
+        do not fabricate a result before that. status "patient_required" /
+        "binary_required" / "error" otherwise.
+    """
+    logger.info(
+        "TOOL START | tool=start_skin_diagnostic | patient_id=%r binary_id=%r",
+        patient_id, binary_id,
+    )
+    resolved_patient_id = (patient_id or ctx.deps.active_patient_id or "").strip()
+    resolved_binary_id = (binary_id or "").strip()
+    if not resolved_patient_id:
+        return _json_response(
+            status="patient_required",
+            data={},
+            message="Please ask the doctor to provide or select a Patient ID before starting skin diagnosis.",
+        )
+    resolved_patient_id = await _resolve_patient_id_if_name(resolved_patient_id)
+    if not resolved_binary_id:
+        return _json_response(
+            status="binary_required",
+            data={},
+            message="Please ask the doctor to select a saved skin photo before starting diagnosis.",
+        )
+
+    get_collector().emit_tool_start(
+        "start_skin_diagnostic",
+        {
+            "patient_id": resolved_patient_id,
+            "binary_id": resolved_binary_id,
+            "initial_complaint": initial_complaint,
+        },
+    )
+
+    try:
+        run = await start_skin_diagnostic_from_binary(
+            user_id=ctx.deps.user_id,
+            conversation_id=ctx.deps.session_id,
+            patient_id=resolved_patient_id,
+            binary_id=resolved_binary_id,
+            initial_complaint=initial_complaint,
+        )
+    except Exception as exc:
+        model_content = _json_response(status="error", data={}, message=str(exc))
+        _record_tool_result_chars(len(model_content))
+        get_collector().collect_tool_call(
+            "start_skin_diagnostic",
+            {
+                "patient_id": resolved_patient_id,
+                "binary_id": resolved_binary_id,
+                "initial_complaint": initial_complaint,
+            },
+            model_content,
+        )
+        return model_content
+
+    model_content = _json_response(
+        status="ok",
+        data={
+            "run_id": run.id,
+            "status": "started",
+            "patient_id": resolved_patient_id,
+            "binary_id": resolved_binary_id,
+        },
+    )
+    _record_tool_result_chars(len(model_content))
+    get_collector().collect_tool_call(
+        "start_skin_diagnostic",
+        {
+            "patient_id": resolved_patient_id,
+            "binary_id": resolved_binary_id,
+            "initial_complaint": initial_complaint,
+        },
+        model_content,
+    )
+    logger.info("TOOL END | tool=start_skin_diagnostic | run_id=%s", run.id)
+    return model_content
+
+
 @agent.tool
 async def diagnose_skin_condition(
     ctx: RunContext[AgentDeps],
@@ -1707,6 +2139,13 @@ async def diagnose_skin_condition(
     - The request is about a patient's stored records/history; use the FHIR
       graph tools instead.
     - The message does not mention a skin/lesion/dermatological complaint.
+    - A named patient (not the current chat user) is the subject, whether
+      named in this message or earlier in this same conversation (e.g. a
+      prior turn already looked up that patient's photo and this message
+      only adds symptoms) — use start_diagnosis_from_patient_image or
+      find_patient_skin_images + start_skin_diagnostic instead; this tool
+      only ever reports on the current chat user's own uploaded photo and
+      will incorrectly say no photo was attached.
 
     Behavior:
     - This tool never diagnoses from text alone. Dermatology diagnosis in
@@ -1811,10 +2250,7 @@ async def search_skin_images(
     count: Annotated[int, Field(description="Max number of photos to return, most recent first.")] = 10,
 ) -> str:
     """
-    Look up dermatology photos previously saved on the live FHIR server
-    (Patient + ImagingStudy resources) — a separate store from the FHIR
-    graph used by search_patient/search_resource above, and separate from
-    the current chat user's own in-progress diagnostic run.
+    Look up dermatology photos saved in the local Neo4j graph.
 
     Use when:
     - The user asks to see/retrieve past skin photos for a named patient
@@ -1830,45 +2266,34 @@ async def search_skin_images(
     IMPORTANT — the UI renders the matched photo(s) inline automatically
     (as real thumbnails) the moment this tool returns a non-empty list; you
     do not need to, and must NOT, put ``view_url``/binary links or raw URLs
-    in your reply — they require an auth header a plain link can't carry
-    and would just 401 if the person clicked it. In your reply just name
-    the patient and how many photos / what dates were found; the photos
-    themselves already appear on screen.
+    in your reply.
 
     Returns:
         str: JSON payload with a list of {study_id, patient_id,
-        patient_name, binary_id, last_updated, view_url}. last_updated is
-        the FHIR server's own save timestamp. Empty list if no patient or
-        no photo matched.
+        patient_name, binary_id, last_updated, view_url}. Empty list if no
+        patient or no photo matched.
     """
-    from app.skin_diagnostic import fhir_images
-    from app.skin_diagnostic.fhir_images import FhirImageError
+    from app.skin_images.neo4j_repository import search_skin_images_neo4j
 
     logger.info(
         "TOOL START | tool=search_skin_images | patient_name=%r patient_id=%r date_from=%r date_to=%r",
         patient_name, patient_id, date_from, date_to,
     )
     try:
-        results = await fhir_images.search_skin_images(
+        results = await search_skin_images_neo4j(
             patient_id=patient_id or None,
             patient_name=patient_name or None,
             date_from=date_from or None,
             date_to=date_to or None,
             count=count,
         )
-        # Push the actual photos to the UI as a dedicated SSE event — the
-        # model's text reply should only describe them, never link to them
-        # (see docstring above), so the frontend renders real <img>
-        # thumbnails instead of a raw, auth-requiring URL the user can't
-        # actually open.
         get_collector().emit_skin_images(results)
         model_content = _json_response(status="ok", data=results, count=len(results))
-    except FhirImageError as exc:
+    except Exception as exc:
         model_content = _json_response(status="error", data=[], message=str(exc))
     _record_tool_result_chars(len(model_content))
     logger.info("TOOL END | tool=search_skin_images | chars=%s", len(model_content))
     return model_content
-
 
 
 @agent.tool
@@ -1885,76 +2310,94 @@ async def start_diagnosis_from_patient_image(
 ) -> str:
     """
     Start the dermatology diagnostic pipeline on a patient's most recent
-    saved FHIR photo, combined with a described symptom — for requests like
-    "lấy ảnh da của bệnh nhân Nam Vũ, bệnh nhân thấy ngứa dữ dội, hãy chẩn
-    đoán bệnh" in one go.
+    saved photo in Neo4j, combined with a described symptom.
 
     Use when:
-    - The user names a patient (not "I"/the current chat user) AND
-      describes a symptom AND asks for a diagnosis, all in one request.
-
-    Do not use when:
-    - No photo exists yet for that patient (search_skin_images returns
-      empty) — tell the user instead of calling this.
-    - The user means their own uploaded photo in this chat; use
-      diagnose_skin_condition instead.
+    - The user names a patient AND describes a symptom AND asks for a diagnosis.
 
     Behavior:
-    - Looks up the patient's single most recent photo via the same lookup
-      as search_skin_images, downloads it, and kicks off the same
-      multi-step vision + clinical-interview pipeline used for a live photo
-      upload. This takes time and may pause for clinical Q&A.
-    - The UI shows the source photo inline the moment it's found — do not
-      add a view_url/link in your reply, just say whose photo it is.
+    - Looks up the patient's single most recent photo from Neo4j, fetches
+      its Binary bytes, and kicks off the vision + clinical-interview pipeline.
 
     Returns:
-        str: JSON payload. status "no_patient" (no matching patient),
-        "no_photo" (patient found but no photo on file — tell the user to
-        upload one), or "started" (run_id given — call
-        diagnose_skin_condition afterward, or later, to check progress/get
-        the result; do not fabricate a result before that).
+        str: JSON payload with status "no_photo", "no_patient", or "started".
     """
+    import base64
     import tempfile
     import uuid as _uuid_mod
     from pathlib import Path as _Path
 
-    from app.skin_diagnostic import fhir_images
-    from app.skin_diagnostic.fhir_images import FhirImageError
     from app.skin_diagnostic.pipeline_runner import run_pipeline_background
     from app.skin_diagnostic.session_store import get_store
     from app.skin_diagnostic.uploads import UPLOADS_DIR
+    from app.skin_images.neo4j_repository import get_binary_for_skin_image, search_skin_images_neo4j
 
     logger.info(
         "TOOL START | tool=start_diagnosis_from_patient_image | patient_name=%r",
         patient_name,
     )
+    get_collector().emit_tool_start(
+        "start_diagnosis_from_patient_image",
+        {"patient_name": patient_name, "symptom_text": symptom_text},
+    )
     try:
-        matches = await fhir_images.search_skin_images(patient_name=patient_name, count=1)
-    except FhirImageError as exc:
+        matches = await search_skin_images_neo4j(patient_name=patient_name, count=1)
+    except Exception as exc:
         model_content = _json_response(status="error", data={}, message=str(exc))
         _record_tool_result_chars(len(model_content))
+        get_collector().collect_tool_call(
+            "start_diagnosis_from_patient_image",
+            {"patient_name": patient_name, "symptom_text": symptom_text},
+            model_content,
+        )
         return model_content
 
     if not matches:
-        payload = {"status": "no_photo", "message": f"No FHIR photo found for patient matching '{patient_name}'."}
+        payload = {"status": "no_photo", "message": f"No photo found in Neo4j for patient matching '{patient_name}'."}
         model_content = _json_response(status="ok", data=payload)
         _record_tool_result_chars(len(model_content))
+        get_collector().collect_tool_call(
+            "start_diagnosis_from_patient_image",
+            {"patient_name": patient_name, "symptom_text": symptom_text},
+            model_content,
+        )
         return model_content
 
     match = matches[0]
     binary_id = match.get("binary_id")
     if not binary_id:
-        payload = {"status": "no_photo", "message": "Patient found but the stored study has no photo."}
+        payload = {"status": "no_photo", "message": "Patient found but the stored report has no photo binary_id."}
         model_content = _json_response(status="ok", data=payload)
+        _record_tool_result_chars(len(model_content))
+        get_collector().collect_tool_call(
+            "start_diagnosis_from_patient_image",
+            {"patient_name": patient_name, "symptom_text": symptom_text},
+            model_content,
+        )
+        return model_content
+
+    get_collector().emit_skin_images([match])
+
+    row = await get_binary_for_skin_image(binary_id)
+    if not row or not row.get("data"):
+        payload = {"status": "no_photo", "message": f"Binary data for '{binary_id}' not found in Neo4j."}
+        model_content = _json_response(status="ok", data=payload)
+        _record_tool_result_chars(len(model_content))
+        get_collector().collect_tool_call(
+            "start_diagnosis_from_patient_image",
+            {"patient_name": patient_name, "symptom_text": symptom_text},
+            model_content,
+        )
+        return model_content
+
+    try:
+        raw_bytes = base64.b64decode(str(row["data"]))
+    except Exception as exc:
+        model_content = _json_response(status="error", data={}, message=f"Failed to decode binary data: {exc}")
         _record_tool_result_chars(len(model_content))
         return model_content
 
-    # Show the photo being diagnosed in the UI right away (same mechanism as
-    # search_skin_images) — the model's reply should still just narrate,
-    # never link to it.
-    get_collector().emit_skin_images([match])
-
-    raw_bytes, content_type = await fhir_images.fetch_binary(binary_id)
+    content_type = row.get("content_type") or "image/jpeg"
     ext = {"image/png": ".png", "image/webp": ".webp"}.get(content_type, ".jpg")
     run_id = _uuid_mod.uuid4().hex
     image_path = str(UPLOADS_DIR / f"{run_id}{ext}")
@@ -1974,12 +2417,23 @@ async def start_diagnosis_from_patient_image(
     payload = {
         "status": "started",
         "run_id": run.id,
+        "current_step": "visual_extract",
         "patient_name": match.get("patient_name") or patient_name,
-        "message": "Diagnostic pipeline started on the patient's most recent photo. Check back with diagnose_skin_condition for progress/result.",
+        "patient_id": match.get("patient_id"),
+        "binary_id": binary_id,
+        "view_url": match.get("view_url"),
     }
     model_content = _json_response(status="ok", data=payload)
     _record_tool_result_chars(len(model_content))
-    logger.info("TOOL END | tool=start_diagnosis_from_patient_image | run_id=%s", run.id)
+    get_collector().collect_tool_call(
+        "start_diagnosis_from_patient_image",
+        {"patient_name": patient_name, "symptom_text": symptom_text},
+        model_content,
+    )
+    logger.info(
+        "TOOL END | tool=start_diagnosis_from_patient_image | run_id=%s binary_id=%s",
+        run.id, binary_id,
+    )
     return model_content
 
 

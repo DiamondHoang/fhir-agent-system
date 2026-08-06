@@ -190,6 +190,45 @@ async def search(request: SearchRequest):
     return {"results": results}
 
 
+@router.get("/patients/search")
+async def search_patients(q: str = "", limit: int = 20):
+    """Minimal Patient lookup for UI autocomplete (the "existing patient"
+    branch of the skin-image upload popup). Wraps the same Patient/name
+    matching the chat agent's search_patient tool uses, but returns a
+    lightweight {id, name, birth_date} shape without going through the LLM.
+    """
+    _require_neo4j()
+    cypher = """
+    MATCH (patient:FHIRResource:Patient)
+    OPTIONAL MATCH (patient)-[:name]->(name)
+    WITH patient, collect(DISTINCT name) AS names
+    WITH patient, names,
+         [name_node IN names |
+             coalesce(
+                 name_node.text,
+                 trim(
+                     coalesce(name_node.family, '') + ' ' +
+                     reduce(s = '', given IN coalesce(name_node.given, []) | s + ' ' + given)
+                 )
+             )
+         ] AS display_names
+    WHERE $query = ''
+       OR patient.id = $query
+       OR any(display_name IN display_names WHERE toLower(display_name) CONTAINS toLower($query))
+    RETURN patient.id AS id,
+           head([d IN display_names WHERE d IS NOT NULL AND d <> '']) AS name,
+           patient.birthDate AS birth_date
+    ORDER BY patient.id
+    LIMIT $limit
+    """
+    rows = await execute_cypher(
+        cypher,
+        {"query": q.strip(), "limit": limit},
+        collect=False,
+    )
+    return {"results": rows}
+
+
 @router.get("/graph/{entity_name}")
 async def graph(entity_name: str, depth: int = 2):
     """Get the subgraph around an entity."""

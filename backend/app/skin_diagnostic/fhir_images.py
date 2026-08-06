@@ -52,7 +52,7 @@ class FhirImageError(RuntimeError):
 
 
 def _base_url() -> str:
-    return settings.fhir_image_base_url.rstrip("/")
+    return settings.fhir_server_url.rstrip("/")
 
 
 async def _client() -> httpx.AsyncClient:

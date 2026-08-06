@@ -12,17 +12,55 @@ class Settings(BaseSettings):
     neo4j_username: str = ""
     neo4j_password: str = ""
 
-    # Internal OpenAI-compatible chat API used by the main agent and Mem0
-    internal_llm_base_url: str = ""
-    internal_llm_api_key: str = ""
-    internal_llm_model: str = ""
+    # LLM provider switch: "ollama" (mặc định, local) hoặc "company" (nội bộ).
+    # Đổi trong .env rồi `docker compose up -d`, không cần rebuild.
+    llm_provider: str = "ollama"
 
-    # Internal OpenAI-compatible embedding API.
-    # It may be the same endpoint as the chat API or a separate service.
-    internal_embedding_base_url: str = ""
-    internal_embedding_api_key: str = ""
-    internal_embedding_model: str = ""
-    internal_embedding_dims: int = 768
+    # Company internal OpenAI-compatible API (khi LLM_PROVIDER=company)
+    company_llm_base_url: str = ""
+    company_llm_api_key: str = ""
+    company_llm_model: str = ""
+    company_embedding_base_url: str = ""
+    company_embedding_api_key: str = ""
+    company_embedding_model: str = ""
+    company_embedding_dims: int = 1024
+
+    # Local Ollama (khi LLM_PROVIDER=ollama)
+    ollama_llm_base_url: str = ""
+    ollama_llm_api_key: str = ""
+    ollama_llm_model: str = ""
+    ollama_embedding_base_url: str = ""
+    ollama_embedding_api_key: str = ""
+    ollama_embedding_model: str = ""
+    ollama_embedding_dims: int = 1024
+
+    @property
+    def internal_llm_base_url(self) -> str:
+        return self.ollama_llm_base_url if self.llm_provider == "ollama" else self.company_llm_base_url
+
+    @property
+    def internal_llm_api_key(self) -> str:
+        return self.ollama_llm_api_key if self.llm_provider == "ollama" else self.company_llm_api_key
+
+    @property
+    def internal_llm_model(self) -> str:
+        return self.ollama_llm_model if self.llm_provider == "ollama" else self.company_llm_model
+
+    @property
+    def internal_embedding_base_url(self) -> str:
+        return self.ollama_embedding_base_url if self.llm_provider == "ollama" else self.company_embedding_base_url
+
+    @property
+    def internal_embedding_api_key(self) -> str:
+        return self.ollama_embedding_api_key if self.llm_provider == "ollama" else self.company_embedding_api_key
+
+    @property
+    def internal_embedding_model(self) -> str:
+        return self.ollama_embedding_model if self.llm_provider == "ollama" else self.company_embedding_model
+
+    @property
+    def internal_embedding_dims(self) -> int:
+        return self.ollama_embedding_dims if self.llm_provider == "ollama" else self.company_embedding_dims
 
     # PostgreSQL — Mem0 pgvector store
     postgres_host: str = "localhost"
@@ -73,6 +111,8 @@ class Settings(BaseSettings):
     skin_qdrant_collection: str = "skin_disease_symptoms"
     skin_kb_min_score: float = 0.6
     skin_session_ttl_hours: int = 24
+    fhir_server_url: str = ""
+    fhir_image_timeout: float = 30.0
 
     model_config = {
         "env_file": "../.env",
@@ -96,6 +136,7 @@ class Settings(BaseSettings):
             "MEM0_VECTOR_STORE_PROVIDER": self.mem0_vector_store_provider,
             "MEM0_COLLECTION_NAME": self.mem0_collection_name,
             "MEM0_AGENT_ID": self.mem0_agent_id,
+            "FHIR_SERVER_URL": self.fhir_server_url,
         }
         missing = [name for name, value in required.items() if not str(value).strip()]
         if missing:

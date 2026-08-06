@@ -121,11 +121,25 @@ class Conversation(Base):
         server_default="0",
     )
 
+    # HAPI FHIR Patient (luong A — "benh nhan moi") this conversation's
+    # skin-diagnostic photo is linked to. Column added by migration
+    # f1a2b3c4d5e6; set in app/skin_diagnostic/router.py. NOTE: this field
+    # was previously mis-mapped as `patient_id` (no matching migration ever
+    # existed for that name), which meant every assignment to
+    # `conversation.fhir_patient_id` in router.py silently failed to persist
+    # (SQLAlchemy just set an untracked plain attribute). Fixed here to
+    # match the actual DB column from f1a2b3c4d5e6.
+    fhir_patient_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     # Neo4j Patient (FHIRResource:Patient) this conversation's skin-diagnostic
-    # photos belong to (see app/skin_images/*). Set once the doctor picks an
-    # existing patient for an uploaded photo; nullable because most
-    # conversations aren't about a photographed patient at all.
-    patient_id: Mapped[str | None] = mapped_column(
+    # photos belong to (see app/skin_images/*, luong B — "benh nhan dang co").
+    # Set once the doctor picks an existing patient for an uploaded photo;
+    # nullable because most conversations aren't about a photographed
+    # patient at all. Column added by migration <neo4j_patient_id revision>.
+    neo4j_patient_id: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
     )

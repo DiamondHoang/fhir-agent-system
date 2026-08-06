@@ -17,14 +17,10 @@ from app.api.conversations import create_conversation_with_user_message
 from app.db.models import Conversation, Message, User
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
-from app.skin_diagnostic import fhir_images
 from app.skin_diagnostic.answer_validation import normalize_yes_no
-from app.skin_diagnostic.fhir_images import FhirImageError
 from app.skin_diagnostic.pipeline_runner import resume_pipeline, run_pipeline_background
 from app.skin_diagnostic.schemas import (
     BulkAnswerRequest,
-    PatientCreateRequest,
-    PatientCreateResponse,
     SkinDiagnosticAnswersResponse,
     SkinDiagnosticDetailResponse,
     SkinDiagnosticStartResponse,
@@ -35,34 +31,11 @@ from app.skin_diagnostic.schemas import (
 from app.skin_diagnostic.session_store import get_store
 from app.skin_diagnostic.session_view import build_result, get_pending_questions, get_step_progress
 from app.skin_diagnostic.uploads import UPLOADS_DIR, save_upload
-
-_CONTENT_TYPE_BY_EXT = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-}
+from app.skin_images.neo4j_repository import get_binary_for_skin_image, patient_exists, search_skin_images_neo4j
+from app.skin_images.service import save_skin_photo_result
 
 
 router = APIRouter(prefix="/skin-diagnostics", tags=["skin diagnostics"])
-
-
-@router.post("/patients", response_model=PatientCreateResponse)
-async def create_fhir_patient(
-    request: PatientCreateRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """Create a minimal Patient on the live FHIR server for the "new
-    patient" popup shown right after an image is selected. The frontend
-    holds the returned patient_id in memory and sends it back on /start.
-    """
-    try:
-        result = await fhir_images.create_patient(
-            request.name, request.gender, request.birth_year
-        )
-    except FhirImageError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return PatientCreateResponse(**result)
 
 
 @router.get("/fhir-images", response_model=SkinImageSearchResponse)
@@ -74,17 +47,16 @@ async def search_fhir_skin_images(
     count: int = 20,
     current_user: User = Depends(get_current_user),
 ):
-    """Look up skin photos stored on the FHIR server (used by the chat
-    agent's search_skin_images tool and by any direct-query UI)."""
+    """Look up skin photos stored in the local Neo4j graph."""
     try:
-        results = await fhir_images.search_skin_images(
+        results = await search_skin_images_neo4j(
             patient_id=patient_id,
             patient_name=patient_name,
             date_from=date_from,
             date_to=date_to,
             count=count,
         )
-    except FhirImageError as exc:
+    except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return SkinImageSearchResponse(results=[SkinImageResult(**r) for r in results])
 
@@ -94,14 +66,26 @@ async def get_fhir_skin_image(
     binary_id: str,
     current_user: User = Depends(get_current_user),
 ):
-    """Proxy raw photo bytes from the FHIR server's Binary resource."""
-    try:
-        raw_bytes, content_type = await fhir_images.fetch_binary(binary_id)
-    except FhirImageError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    """Proxy raw photo bytes from Neo4j Binary resource."""
+    import base64
     from fastapi.responses import Response
 
-    return Response(content=raw_bytes, media_type=content_type)
+    clean_id = binary_id if binary_id.startswith("binary-") else f"binary-{binary_id}"
+    row = await get_binary_for_skin_image(clean_id)
+    if not row or not row.get("data"):
+        # Also try exact binary_id
+        row = await get_binary_for_skin_image(binary_id)
+    if not row or not row.get("data"):
+        raise HTTPException(status_code=404, detail="Image binary not found in Neo4j")
+
+    encoded = str(row.get("data") or "")
+    try:
+        content = base64.b64decode(encoded)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Invalid image binary data")
+
+    content_type = row.get("content_type") or "image/jpeg"
+    return Response(content=content, media_type=content_type)
 
 
 @router.post("/start", response_model=SkinDiagnosticStartResponse)
@@ -109,10 +93,22 @@ async def start_skin_diagnostic(
     image: UploadFile = File(...),
     anamnesis: str = Form(""),
     conversation_id: str | None = Form(None),
-    fhir_patient_id: str | None = Form(None),
+    # Existing Neo4j patient ("Bệnh nhân đang có" — the only patient-linking
+    # option now; there is no "new patient" flow, and nothing here ever
+    # writes to the remote FHIR server). Three cases this endpoint covers:
+    #   1. neo4j_patient_id set,  anamnesis empty -> save the photo to that
+    #      patient's Neo4j record, no interview/diagnosis.
+    #   2. neo4j_patient_id set,  anamnesis given -> run the interview
+    #      pipeline, then save photo + diagnosis to that patient.
+    #   3. neo4j_patient_id empty, anamnesis given -> run the interview
+    #      pipeline, nothing is persisted to Neo4j (no patient to link to).
+    neo4j_patient_id: str | None = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if neo4j_patient_id and not await patient_exists(neo4j_patient_id):
+        raise HTTPException(status_code=404, detail="Patient was not found in Neo4j")
+
     # A photo-based diagnosis request previously never touched the
     # conversations/messages tables at all — it only lived in this module's
     # own in-memory session store. That meant it never showed up as a named
@@ -130,29 +126,6 @@ async def start_skin_diagnostic(
     store = await get_store()
     run_id = str(uuid.uuid4())
     image_path, image_url = await save_upload(image, run_id)
-
-    # Push the same photo to the live FHIR server (Binary + ImagingStudy) if
-    # a patient was created via the "new patient" popup before this call.
-    # Best-effort: a FHIR outage should not block the local diagnostic run
-    # the doctor is already looking at, so failures are logged, not raised.
-    fhir_study_id = ""
-    fhir_binary_id = ""
-    if fhir_patient_id:
-        try:
-            content_type = _CONTENT_TYPE_BY_EXT.get(
-                Path(image_path).suffix.lower(), "image/jpeg"
-            )
-            raw_bytes = Path(image_path).read_bytes()
-            fhir_result = await fhir_images.save_skin_image(
-                fhir_patient_id, raw_bytes, content_type
-            )
-            fhir_study_id = fhir_result["study_id"]
-            fhir_binary_id = fhir_result["binary_id"]
-        except FhirImageError:
-            logging.getLogger(__name__).exception(
-                "FHIR image save failed for run %s (patient %s) — continuing without it",
-                run_id, fhir_patient_id,
-            )
 
     conversation: Conversation | None = None
     if conversation_id:
@@ -180,8 +153,8 @@ async def start_skin_diagnostic(
             )
         )
         conversation.updated_at = datetime.now(timezone.utc)
-        if fhir_patient_id:
-            conversation.fhir_patient_id = fhir_patient_id
+        if neo4j_patient_id:
+            conversation.neo4j_patient_id = neo4j_patient_id
         await db.commit()
         await db.refresh(conversation)
     else:
@@ -192,8 +165,8 @@ async def start_skin_diagnostic(
             message_type="skin_image",
             image_url=image_url,
         )
-        if fhir_patient_id:
-            conversation.fhir_patient_id = fhir_patient_id
+        if neo4j_patient_id:
+            conversation.neo4j_patient_id = neo4j_patient_id
             await db.commit()
             await db.refresh(conversation)
 
@@ -204,14 +177,28 @@ async def start_skin_diagnostic(
         image_url=image_url,
         anamnesis=anamnesis,
         conversation_id=str(conversation.id),
-        fhir_patient_id=fhir_patient_id or "",
+        neo4j_patient_id=neo4j_patient_id or "",
     )
-    if fhir_study_id:
-        await store.update(run_id, fhir_study_id=fhir_study_id, fhir_binary_id=fhir_binary_id)
 
     # No symptoms typed -> the doctor just wants the photo saved, not a
-    # diagnosis. Skip the (slow, LLM-heavy) pipeline entirely.
+    # diagnosis. Skip the (slow, LLM-heavy) pipeline entirely, but if an
+    # existing Neo4j patient was selected still persist the photo itself
+    # (Binary/Media/DiagnosticReport) into the local Neo4j graph — this is
+    # case 1 ("lưu ảnh vô bệnh nhân đang có") and must never go through the
+    # remote FHIR server.
     if not anamnesis.strip():
+        if neo4j_patient_id:
+            try:
+                await save_skin_photo_result(
+                    patient_id=neo4j_patient_id,
+                    image_path=image_path,
+                    conclusion_text="Ảnh da liễu đã được lưu vào hồ sơ bệnh nhân (chưa yêu cầu chẩn đoán).",
+                )
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Failed to save skin photo to Neo4j for run %s (patient %s)",
+                    run_id, neo4j_patient_id,
+                )
         await store.update(run_id, status="saved", current_step="saved")
         return SkinDiagnosticStartResponse(
             run_id=run.id,

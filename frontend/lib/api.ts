@@ -99,13 +99,6 @@ export interface SkinDiagnosticStartResponse {
   conversation_title: string;
 }
 
-/** "new patient" popup shown right after an image is selected — see
- * POST /skin-diagnostics/patients on the backend. */
-export interface PatientCreateResponse {
-  patient_id: string;
-  name: string;
-}
-
 export interface SkinImageResult {
   study_id: string;
   patient_id: string | null;
@@ -113,6 +106,54 @@ export interface SkinImageResult {
   binary_id: string | null;
   last_updated: string;
   view_url: string | null;
+}
+
+/** Response from POST /skin-images/analyze (luong B — upload for an
+ * existing Neo4j patient). Mirrors backend app/skin_images/schemas.py
+ * SkinImageAnalyzeResponse. */
+export interface SkinImageAnalyzeResponse {
+  binary_id: string;
+  media_id: string;
+  diagnostic_report_id: string;
+  modality: string;
+  analysis_text: string;
+  image_url: string;
+  content_type: string | null;
+  created_at: string;
+  // Conversation this result was persisted into (F-10) — same pattern as
+  // SkinDiagnosticStartResponse for luong A, so a reload doesn't lose it.
+  conversation_id: string;
+  conversation_title: string;
+}
+
+/** Response from POST /skin-images/save — pure "attach photo to existing
+ * patient, no diagnosis, no chat message" case. Mirrors backend
+ * app/skin_images/schemas.py SkinImageSaveResponse. */
+export interface SkinImageSaveResponse {
+  binary_id: string;
+  media_id: string;
+  diagnostic_report_id: string;
+}
+
+/** Minimal patient row from GET /patients/search, used by the "existing
+ * patient" autocomplete when uploading a skin image (luong B). */
+export interface PatientSearchResult {
+  id: string;
+  name: string | null;
+  birth_date: string | null;
+}
+
+/** One row of GET /skin-images — mirrors backend SkinImageSummary. Distinct
+ * shape from SkinImageResult (which is the luong A / agent-tool gallery
+ * shape); this one backs a direct per-patient image list if the UI needs it. */
+export interface SkinImageSummary {
+  diagnostic_report_id: string;
+  media_id: string | null;
+  binary_id: string | null;
+  modality: string | null;
+  conclusion: string;
+  image_url: string | null;
+  created_at: string | null;
 }
 
 export class ApiError extends Error {
@@ -292,11 +333,86 @@ export async function openMessageStream(
   });
 }
 
+/**
+ * Upload a skin photo for an existing Neo4j patient (luong B). Backs the
+ * "existing patient" branch of the image-attach popup, as opposed to
+ * startSkinDiagnostic (luong A, creates/uses a HAPI patient instead).
+ * `note` is whatever the doctor typed alongside the photo (optional); it's
+ * persisted as the user message the same way luong A does with `anamnesis`.
+ * `conversationId` reuses the open chat if there is one, mirroring
+ * startSkinDiagnostic's `conversation_id` param.
+ */
+export async function analyzeSkinImage(
+  image: File,
+  patientId: string,
+  note?: string,
+  conversationId?: string | null,
+): Promise<SkinImageAnalyzeResponse> {
+  const body = new FormData();
+  body.append("patient_id", patientId);
+  body.append("image", image);
+  if (note) body.append("note", note);
+  if (conversationId) body.append("conversation_id", conversationId);
+
+  const response = await apiFetch("/skin-images/analyze", {
+    method: "POST",
+    body,
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await readError(response));
+  }
+  return response.json() as Promise<SkinImageAnalyzeResponse>;
+}
+
+/**
+ * Attach a photo to an existing Neo4j patient with no diagnosis and no
+ * chat message — used when the doctor picks a patient but doesn't type
+ * any symptoms, so the flow doesn't need to jump into the chat view at
+ * all. Backs POST /skin-images/save.
+ */
+export async function saveSkinPhotoOnly(
+  image: File,
+  patientId: string,
+): Promise<SkinImageSaveResponse> {
+  const body = new FormData();
+  body.append("patient_id", patientId);
+  body.append("image", image);
+
+  const response = await apiFetch("/skin-images/save", {
+    method: "POST",
+    body,
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await readError(response));
+  }
+  return response.json() as Promise<SkinImageSaveResponse>;
+}
+
+/** List skin images already saved in Neo4j, optionally scoped to one patient. */
+export async function listSkinImages(patientId?: string): Promise<SkinImageSummary[]> {
+  const query = new URLSearchParams();
+  if (patientId) query.set("patient_id", patientId);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await jsonRequest<{ items: SkinImageSummary[] }>(`/skin-images${suffix}`);
+  return response.items;
+}
+
+/** Autocomplete lookup for an existing Neo4j patient (skin-image upload
+ * popup, luong B). Thin wrapper around GET /patients/search. */
+export async function searchExistingPatients(query: string): Promise<PatientSearchResult[]> {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  const response = await jsonRequest<{ results: PatientSearchResult[] }>(
+    `/patients/search?${params.toString()}`,
+  );
+  return response.results;
+}
+
 export async function startSkinDiagnostic(
   image: File,
   anamnesis: string,
   conversationId?: string | null,
-  fhirPatientId?: string | null,
+  neo4jPatientId?: string | null,
 ): Promise<SkinDiagnosticStartResponse> {
   const body = new FormData();
   body.append("image", image);
@@ -304,8 +420,8 @@ export async function startSkinDiagnostic(
   if (conversationId) {
     body.append("conversation_id", conversationId);
   }
-  if (fhirPatientId) {
-    body.append("fhir_patient_id", fhirPatientId);
+  if (neo4jPatientId) {
+    body.append("neo4j_patient_id", neo4jPatientId);
   }
 
   const response = await apiFetch("/skin-diagnostics/start", {
@@ -316,28 +432,6 @@ export async function startSkinDiagnostic(
     throw new ApiError(response.status, await readError(response));
   }
   return response.json() as Promise<SkinDiagnosticStartResponse>;
-}
-
-/**
- * "New patient" popup: creates a minimal Patient on the live FHIR server
- * right after a photo is picked. The returned patient_id is held in memory
- * by the caller and sent back on startSkinDiagnostic so the photo's
- * ImagingStudy is linked to this patient.
- */
-export async function createFhirPatient(
-  name: string,
-  gender?: string | null,
-  birthYear?: string | null,
-): Promise<PatientCreateResponse> {
-  return jsonRequest<PatientCreateResponse>("/skin-diagnostics/patients", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      gender: gender || null,
-      birth_year: birthYear || null,
-    }),
-  });
 }
 
 /** Look up skin photos already stored on the FHIR server — by patient id,
