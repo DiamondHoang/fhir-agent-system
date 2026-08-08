@@ -62,3 +62,4 @@ Thumbs.db
 *.swo
 *~
 backend/app/skin_diagnostic/data
+backend/app/logs/debug

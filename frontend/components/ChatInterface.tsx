@@ -542,19 +542,33 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           const filtered = prev.filter(
             (m) => !(m.skinRunId === runId && m.type === "skin_questions" && !m.skinSubmitted)
           );
+          const pendingCard: Message = {
+            id: `skin-q-${runId}-${Date.now()}`,
+            conversation_id: activeConversationId || runId,
+            role: "assistant",
+            content: "Vui lòng trả lời các câu hỏi lâm sàng dưới đây để làm rõ chẩn đoán:",
+            created_at: new Date().toISOString(),
+            type: "skin_questions",
+            skinQuestions: status.pending_questions || [],
+            skinSubmitted: false,
+            skinRunId: runId,
+          };
+          // Đặt card ngay sau tin nhắn user gần nhất, đồng nhất với
+          // loadConversationMessages, thay vì luôn nối vào cuối.
+          let lastUserIdx = -1;
+          for (let i = filtered.length - 1; i >= 0; i -= 1) {
+            if (filtered[i].role === "user") {
+              lastUserIdx = i;
+              break;
+            }
+          }
+          if (lastUserIdx === -1) {
+            return [...filtered, pendingCard];
+          }
           return [
-            ...filtered,
-            {
-              id: `skin-q-${runId}-${Date.now()}`,
-              conversation_id: activeConversationId || runId,
-              role: "assistant",
-              content: "Vui lòng trả lời các câu hỏi lâm sàng dưới đây để làm rõ chẩn đoán:",
-              created_at: new Date().toISOString(),
-              type: "skin_questions",
-              skinQuestions: status.pending_questions || [],
-              skinSubmitted: false,
-              skinRunId: runId,
-            },
+            ...filtered.slice(0, lastUserIdx + 1),
+            pendingCard,
+            ...filtered.slice(lastUserIdx + 1),
           ];
         });
       } else if (status.status === "completed" && status.result) {
@@ -695,19 +709,35 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
               ) {
                 return prev;
               }
+              const pendingCard: Message = {
+                id: `skin-q-${skinStatus.run_id}`,
+                conversation_id: conversationId,
+                role: "assistant",
+                content: "Vui lòng trả lời các câu hỏi lâm sàng dưới đây để làm rõ chẩn đoán:",
+                created_at: new Date().toISOString(),
+                type: "skin_questions",
+                skinQuestions: skinStatus.pending_questions || [],
+                skinSubmitted: false,
+                skinRunId: skinStatus.run_id,
+              };
+              // Đặt card ngay sau tin nhắn user gần nhất (vd. "bệnh nhân ...")
+              // thay vì luôn nối vào cuối — nếu không, mọi nội dung khác được
+              // nạp/tái tạo sau đó (round cards, kết quả cũ, ...) sẽ đẩy card
+              // câu hỏi đang chờ trả lời xuống tận đáy khi mở lại hội thoại.
+              let lastUserIdx = -1;
+              for (let i = prev.length - 1; i >= 0; i -= 1) {
+                if (prev[i].role === "user") {
+                  lastUserIdx = i;
+                  break;
+                }
+              }
+              if (lastUserIdx === -1) {
+                return [...prev, pendingCard];
+              }
               return [
-                ...prev,
-                {
-                  id: `skin-q-${skinStatus.run_id}`,
-                  conversation_id: conversationId,
-                  role: "assistant",
-                  content: "Vui lòng trả lời các câu hỏi lâm sàng dưới đây để làm rõ chẩn đoán:",
-                  created_at: new Date().toISOString(),
-                  type: "skin_questions",
-                  skinQuestions: skinStatus.pending_questions || [],
-                  skinSubmitted: false,
-                  skinRunId: skinStatus.run_id,
-                },
+                ...prev.slice(0, lastUserIdx + 1),
+                pendingCard,
+                ...prev.slice(lastUserIdx + 1),
               ];
             });
           } else if (skinStatus.status === "running") {

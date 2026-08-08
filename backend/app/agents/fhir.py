@@ -67,6 +67,16 @@ before calling anything:
    rash, or other dermatological complaint (e.g. "bệnh nhân bị ngứa, hãy
    chẩn đoán bệnh").
 
+   Do not decide this yourself based on how "dermatological" the symptom
+   wording sounds. If the user names a patient, points at (or already has)
+   a photo of theirs, describes any symptom (including ones that sound like
+   pain, mobility issues, swelling, numbness, etc., not just itching/rash),
+   and asks for a diagnosis, that is still a SKIN / DERMATOLOGY DIAGNOSIS
+   REQUEST — route it to the tools below. Whether the photo and the symptom
+   are actually related is for the vision + clinical-interview pipeline to
+   determine, not you. Never substitute your own clarifying questions or a
+   refusal for calling the tool in this situation.
+
    First decide WHOSE photo is being diagnosed:
 
    a) A NAMED PATIENT (not "I"/the current chat user) is the subject —
@@ -2331,6 +2341,17 @@ async def start_diagnosis_from_patient_image(
 
     Use when:
     - The user names a patient AND describes a symptom AND asks for a diagnosis.
+
+    IMPORTANT — do not pre-filter by how "dermatological" the symptom
+    wording sounds. Call this tool even if the described symptom (e.g. pain,
+    difficulty walking, swelling, numbness) does not itself sound like a
+    skin/rash complaint. The user is asking you to diagnose the patient's
+    saved photo in light of that symptom — the vision + clinical-interview
+    pipeline (not you) is what determines whether the photo and symptom are
+    related and what the relevant differentials are. Never respond with your
+    own clarifying questions or a refusal instead of calling this tool when
+    a named patient + a symptom description + a diagnosis request are all
+    present; that judgment call belongs to the pipeline, not to you.
 
     Behavior:
     - Looks up the patient's single most recent photo from Neo4j, fetches
