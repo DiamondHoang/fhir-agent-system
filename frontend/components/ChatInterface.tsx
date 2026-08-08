@@ -510,12 +510,6 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   const streamingEntitiesRef = useRef<ExtractedEntity[]>([]);
   const streamingPreferencesRef = useRef<DetectedPreference[]>([]);
   const streamingSkinImagesRef = useRef<SkinImageResult[]>([]);
-  // Nhớ tên bệnh nhân đã chọn theo run_id — dùng để hiện thông báo "Đã lưu
-  // ảnh vào hồ sơ bệnh nhân ..." đúng tên khi diagnosis hoàn tất (luồng gửi
-  // kèm tin nhắn triệu chứng), vì `pendingNeo4jPatientName` bị clear ngay
-  // sau khi run bắt đầu để không dính sang lần chọn ảnh kế tiếp.
-  const linkedPatientNamesRef = useRef<Record<string, string>>({});
-
   // Health Status
   const [backendStatus, setBackendStatus] = useState<"ok" | "degraded" | "offline">("offline");
 
@@ -636,19 +630,10 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             },
           ];
         });
-        // Luồng gửi kèm tin nhắn triệu chứng + ảnh + đã chọn bệnh nhân: ảnh
-        // chỉ thực sự được lưu vào hồ sơ Neo4j ở bước cuối cùng của
-        // pipeline (sau khi có chẩn đoán), khác với nút "Lưu vào hồ sơ"
-        // riêng (lưu ngay, có thông báo ngay). Giờ backend đã trả về cờ
-        // `photo_saved_to_patient` trong cùng kết quả này, nên hiện thông
-        // báo tương tự ngay khi thấy cờ đó — không còn im lặng nữa.
-        if (resultObj.photo_saved_to_patient) {
-          const patientName = linkedPatientNamesRef.current[runId];
-          if (patientName) {
-            showSaveNotice(`Đã lưu ảnh vào hồ sơ bệnh nhân ${patientName}`);
-          }
-          delete linkedPatientNamesRef.current[runId];
-        }
+        // Theo yêu cầu: thông báo "Đã lưu ảnh..." chỉ hiện khi bấm nút
+        // "Lưu vào hồ sơ" riêng (saveAttachedPhotoOnly), không hiện ở luồng
+        // gửi kèm triệu chứng + ảnh này nữa, kể cả khi ảnh đã thực sự được
+        // lưu vào Neo4j ở bước cuối pipeline (photo_saved_to_patient=true).
       } else if (status.status === "error") {
         stopSkinPolling();
         setLoading(false);
@@ -1150,10 +1135,6 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           neo4jPatientIdForRun,
         );
         setActiveSkinRunId(startRes.run_id);
-        if (neo4jPatientIdForRun) {
-          linkedPatientNamesRef.current[startRes.run_id] =
-            pendingNeo4jPatientName || neo4jPatientIdForRun;
-        }
 
         // The skin-diagnostic run now creates/reuses a real Conversation on
         // the backend (see app/skin_diagnostic/router.py). Reflect that here
@@ -1475,14 +1456,28 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             const finalEntities = streamingEntitiesRef.current;
             const finalPreferences = streamingPreferencesRef.current;
             const mappedAssistant = mapBackendMessage(assistantMessage);
-            setMessages((prev) => appendMessageOnce(prev, {
-              ...mappedAssistant,
-              content: responseText || assistantMessage.content,
-              toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
-              entities: finalEntities.length > 0 ? [...finalEntities] : undefined,
-              preferences: finalPreferences.length > 0 ? [...finalPreferences] : undefined,
-              skinImageResults: undefined,
-            }));
+            // Đây KHÔNG phải luồng chẩn đoán, nên "done" không suppress
+            // bubble text — nghĩa là bubble ảnh tạm được tạo lúc sự kiện
+            // "skin_images" (id "skin-photo-*") và bubble text cuối này sẽ
+            // cùng hiển thị, tách thành 2 tin. Backend chỉ lưu 1 record duy
+            // nhất (ảnh nằm trong structured_data.skin_images của chính
+            // message text — xem mapBackendMessage), nên sau khi load lại
+            // từ DB nó luôn gộp thành 1 bubble. Để khớp với dữ liệu đã lưu:
+            // xoá bubble ảnh tạm và gắn ảnh đó vào bubble text cuối cùng.
+            const collectedImages = streamingSkinImagesRef.current;
+            setMessages((prev) => {
+              const withoutTempPhoto = collectedImages.length > 0
+                ? prev.filter((m) => !m.id.startsWith("skin-photo-"))
+                : prev;
+              return appendMessageOnce(withoutTempPhoto, {
+                ...mappedAssistant,
+                content: responseText || assistantMessage.content,
+                toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
+                entities: finalEntities.length > 0 ? [...finalEntities] : undefined,
+                preferences: finalPreferences.length > 0 ? [...finalPreferences] : undefined,
+                skinImageResults: collectedImages.length > 0 ? [...collectedImages] : undefined,
+              });
+            });
           }
           resetStreamingState();
           break;
