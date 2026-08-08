@@ -41,6 +41,15 @@ def build_result(state: dict) -> dict:
         # collapsing them into one flat block.
         "round1_qa_pairs": round1_pairs,
         "round2_qa_pairs": round2_pairs,
+        # True only when a patient was linked to this run AND the photo +
+        # diagnosis conclusion were successfully saved to that patient's
+        # Neo4j record (see _save_photo_to_neo4j_if_linked). The frontend
+        # uses this to show a "Đã lưu ảnh vào hồ sơ bệnh nhân ..." toast the
+        # moment the diagnosis result arrives — the same confirmation the
+        # standalone "Lưu vào hồ sơ" icon button already gives, but for the
+        # submit-with-text-and-photo path where the save only happens
+        # silently at the very end of the full pipeline.
+        "photo_saved_to_patient": bool(state.get("photo_saved_to_patient", False)),
     }
 
 

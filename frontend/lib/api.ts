@@ -90,6 +90,10 @@ export interface SkinDiagnosticResult {
   qa_history: string;
   round1_qa_pairs: SkinAnsweredQuestion[];
   round2_qa_pairs: SkinAnsweredQuestion[];
+  // True when this run had a patient linked (chosen before submitting text
+  // + photo together) and the photo + diagnosis conclusion were
+  // successfully saved to that patient's record.
+  photo_saved_to_patient?: boolean;
 }
 
 export interface SkinDiagnosticStatus {

@@ -218,6 +218,19 @@ function mapBackendMessage(message: ChatMessage): Message {
   if (message.message_type === "skin_result" && message.structured_data) {
     mapped.type = "skin_result";
     mapped.skinResult = message.structured_data as unknown as SkinDiagnosticResult;
+    // `run_id` is saved alongside the result fields (see
+    // _save_diagnosis_message on the backend) specifically so this mapped
+    // message carries the same `skinRunId` the live Round 1/Round 2 cards
+    // use. Without this, `skinRunId` stays undefined here, so
+    // loadConversationMessages' `resultIdx` lookup (matching on
+    // `m.skinRunId === run_id && m.type === "skin_result"`) never finds
+    // this message and falls back to appending the round cards at the very
+    // end of the conversation instead of right before the result — exactly
+    // the "Round 1/2 luôn nhảy xuống cuối sau khi rời rồi quay lại chat" bug.
+    const runId = message.structured_data.run_id;
+    if (typeof runId === "string") {
+      mapped.skinRunId = runId;
+    }
   }
   // Photos found via search_skin_images / start_diagnosis_from_patient_image
   // are persisted onto structured_data.skin_images (see chat_stream.py) so
@@ -330,6 +343,30 @@ function replaceMessage(messages: Message[], localId: string, message: ChatMessa
 function appendMessageOnce(messages: Message[], message: Message): Message[] {
   if (messages.some((item) => item.id === message.id)) return messages;
   return [...messages, message];
+}
+
+/** Chèn `card` ngay sau card CUỐI CÙNG thuộc cùng `runId` (ảnh, round đã
+ * trả lời, v.v.), hoặc nối vào cuối mảng nếu run này chưa có card nào.
+ *
+ * Trước đây các card round câu hỏi (Round 1, Round 2, ...) được chèn "ngay
+ * sau tin nhắn user gần nhất" — heuristic này chỉ đúng cho Round 1. Từ
+ * Round 2 trở đi không có tin nhắn user mới nào được thêm giữa các round
+ * (submit chỉ đánh dấu `skinSubmitted: true` trên card cũ), nên
+ * "tin nhắn user gần nhất" vẫn trỏ về đúng tin nhắn user ban đầu — khiến
+ * card Round 2 bị chèn TRƯỚC card Round 1 (đã submit) nằm phía sau vị trí
+ * đó, làm sai thứ tự hiển thị dù dữ liệu vẫn đúng thứ tự thời gian.
+ * Neo theo "card cuối cùng của cùng run" thay vì "user message gần nhất"
+ * loại bỏ hoàn toàn lớp giả định đó và luôn cho thứ tự đúng bất kể số round. */
+function insertAfterLastRunCard(arr: Message[], runId: string, card: Message): Message[] {
+  let lastRunIdx = -1;
+  for (let i = arr.length - 1; i >= 0; i -= 1) {
+    if (arr[i].skinRunId === runId) {
+      lastRunIdx = i;
+      break;
+    }
+  }
+  if (lastRunIdx === -1) return [...arr, card];
+  return [...arr.slice(0, lastRunIdx + 1), card, ...arr.slice(lastRunIdx + 1)];
 }
 
 /** Rebuild the two "Đã hoàn thành trả lời (5/5 câu hỏi)" cards (Round 1,
@@ -473,6 +510,11 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   const streamingEntitiesRef = useRef<ExtractedEntity[]>([]);
   const streamingPreferencesRef = useRef<DetectedPreference[]>([]);
   const streamingSkinImagesRef = useRef<SkinImageResult[]>([]);
+  // Nhớ tên bệnh nhân đã chọn theo run_id — dùng để hiện thông báo "Đã lưu
+  // ảnh vào hồ sơ bệnh nhân ..." đúng tên khi diagnosis hoàn tất (luồng gửi
+  // kèm tin nhắn triệu chứng), vì `pendingNeo4jPatientName` bị clear ngay
+  // sau khi run bắt đầu để không dính sang lần chọn ảnh kế tiếp.
+  const linkedPatientNamesRef = useRef<Record<string, string>>({});
 
   // Health Status
   const [backendStatus, setBackendStatus] = useState<"ok" | "degraded" | "offline">("offline");
@@ -553,23 +595,10 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             skinSubmitted: false,
             skinRunId: runId,
           };
-          // Đặt card ngay sau tin nhắn user gần nhất, đồng nhất với
-          // loadConversationMessages, thay vì luôn nối vào cuối.
-          let lastUserIdx = -1;
-          for (let i = filtered.length - 1; i >= 0; i -= 1) {
-            if (filtered[i].role === "user") {
-              lastUserIdx = i;
-              break;
-            }
-          }
-          if (lastUserIdx === -1) {
-            return [...filtered, pendingCard];
-          }
-          return [
-            ...filtered.slice(0, lastUserIdx + 1),
-            pendingCard,
-            ...filtered.slice(lastUserIdx + 1),
-          ];
+          // Chèn ngay sau card cuối cùng của CÙNG run này (ảnh, round đã
+          // trả lời, ...) — không dùng "user message gần nhất" nữa vì
+          // heuristic đó chèn nhầm Round 2 lên trước Round 1 đã submit.
+          return insertAfterLastRunCard(filtered, runId, pendingCard);
         });
       } else if (status.status === "completed" && status.result) {
         stopSkinPolling();
@@ -607,6 +636,19 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             },
           ];
         });
+        // Luồng gửi kèm tin nhắn triệu chứng + ảnh + đã chọn bệnh nhân: ảnh
+        // chỉ thực sự được lưu vào hồ sơ Neo4j ở bước cuối cùng của
+        // pipeline (sau khi có chẩn đoán), khác với nút "Lưu vào hồ sơ"
+        // riêng (lưu ngay, có thông báo ngay). Giờ backend đã trả về cờ
+        // `photo_saved_to_patient` trong cùng kết quả này, nên hiện thông
+        // báo tương tự ngay khi thấy cờ đó — không còn im lặng nữa.
+        if (resultObj.photo_saved_to_patient) {
+          const patientName = linkedPatientNamesRef.current[runId];
+          if (patientName) {
+            showSaveNotice(`Đã lưu ảnh vào hồ sơ bệnh nhân ${patientName}`);
+          }
+          delete linkedPatientNamesRef.current[runId];
+        }
       } else if (status.status === "error") {
         stopSkinPolling();
         setLoading(false);
@@ -720,25 +762,12 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                 skinSubmitted: false,
                 skinRunId: skinStatus.run_id,
               };
-              // Đặt card ngay sau tin nhắn user gần nhất (vd. "bệnh nhân ...")
-              // thay vì luôn nối vào cuối — nếu không, mọi nội dung khác được
-              // nạp/tái tạo sau đó (round cards, kết quả cũ, ...) sẽ đẩy card
-              // câu hỏi đang chờ trả lời xuống tận đáy khi mở lại hội thoại.
-              let lastUserIdx = -1;
-              for (let i = prev.length - 1; i >= 0; i -= 1) {
-                if (prev[i].role === "user") {
-                  lastUserIdx = i;
-                  break;
-                }
-              }
-              if (lastUserIdx === -1) {
-                return [...prev, pendingCard];
-              }
-              return [
-                ...prev.slice(0, lastUserIdx + 1),
-                pendingCard,
-                ...prev.slice(lastUserIdx + 1),
-              ];
+              // Chèn ngay sau card cuối cùng của CÙNG run (ảnh, round đã
+              // trả lời, ...) thay vì "user message gần nhất" — cách cũ chèn
+              // nhầm card câu hỏi đang chờ (vd. Round 2) lên TRƯỚC các round
+              // card đã hoàn thành (vd. Round 1) vừa được nạp lại ở trên,
+              // vì cả hai đều chỉ tìm thấy cùng 1 user message ban đầu.
+              return insertAfterLastRunCard(prev, skinStatus.run_id, pendingCard);
             });
           } else if (skinStatus.status === "running") {
             startSkinPolling(skinStatus.run_id);
@@ -1121,6 +1150,10 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           neo4jPatientIdForRun,
         );
         setActiveSkinRunId(startRes.run_id);
+        if (neo4jPatientIdForRun) {
+          linkedPatientNamesRef.current[startRes.run_id] =
+            pendingNeo4jPatientName || neo4jPatientIdForRun;
+        }
 
         // The skin-diagnostic run now creates/reuses a real Conversation on
         // the backend (see app/skin_diagnostic/router.py). Reflect that here
@@ -1385,7 +1418,29 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             const deduped = incoming.filter(
               (img) => !existingIds.has(img.binary_id || img.study_id),
             );
-            streamingSkinImagesRef.current = [...streamingSkinImagesRef.current, ...deduped];
+            if (deduped.length > 0) {
+              streamingSkinImagesRef.current = [...streamingSkinImagesRef.current, ...deduped];
+              // Render ảnh ra chat NGAY khi event này về, thay vì chỉ gom
+              // vào ref rồi đợi sự kiện "done" — với luồng
+              // start_diagnosis_from_patient_image, khối xử lý "done" bị
+              // suppress toàn bộ (xem case "done" bên dưới) nên ảnh sẽ
+              // không bao giờ hiện nếu chờ tới đó. Event "skin_images" luôn
+              // về TRƯỚC "tool_end" (backend emit ảnh trước khi trả kết quả
+              // tool), nên card ảnh này chắc chắn xuất hiện trước card câu
+              // hỏi Round 1 (được tạo khi "tool_end" kích hoạt polling).
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `skin-photo-${Date.now()}`,
+                  conversation_id: activeConversationId || "",
+                  role: "assistant",
+                  content: "Ảnh gần nhất của bệnh nhân:",
+                  created_at: new Date().toISOString(),
+                  type: "text",
+                  skinImageResults: deduped,
+                },
+              ]);
+            }
           }
           break;
 
@@ -1413,10 +1468,12 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           // If the agent triggered a skin-diagnostic run, its assistant
           // wrap-up text is redundant — the Q&A card is already visible
           // above. Suppress the message bubble entirely in that case.
+          // (Ảnh — nếu có — đã được render riêng ngay lúc sự kiện SSE
+          // "skin_images" về, không phụ thuộc vào khối này nữa, nên
+          // KHÔNG gán lại skinImageResults ở đây để tránh hiện ảnh 2 lần.)
           if (isChatMessage(assistantMessage) && !skinDiagnosticStarted) {
             const finalEntities = streamingEntitiesRef.current;
             const finalPreferences = streamingPreferencesRef.current;
-            const finalSkinImages = streamingSkinImagesRef.current;
             const mappedAssistant = mapBackendMessage(assistantMessage);
             setMessages((prev) => appendMessageOnce(prev, {
               ...mappedAssistant,
@@ -1424,8 +1481,7 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
               toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
               entities: finalEntities.length > 0 ? [...finalEntities] : undefined,
               preferences: finalPreferences.length > 0 ? [...finalPreferences] : undefined,
-              skinImageResults:
-                finalSkinImages.length > 0 ? [...finalSkinImages] : mappedAssistant.skinImageResults,
+              skinImageResults: undefined,
             }));
           }
           resetStreamingState();

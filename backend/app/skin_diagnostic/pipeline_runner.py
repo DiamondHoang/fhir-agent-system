@@ -195,8 +195,17 @@ async def _save_diagnosis_message(state: dict, run) -> None:
                 # here too means a page reload gets back the formatted
                 # ranked-diagnosis card instead of only the plain-text
                 # summary above.
+                #
+                # `run_id` is included alongside build_result()'s fields so
+                # the frontend can tag the reloaded message with the same
+                # `skinRunId` it uses on the live Round 1/Round 2 cards —
+                # without it, the reloaded result message has no run_id to
+                # match against, so the frontend can never find where to
+                # re-insert those round cards and pushes them to the very
+                # end of the conversation instead of right before this
+                # result message.
                 message_type="skin_result",
-                structured_data=build_result(state),
+                structured_data={**build_result(state), "run_id": run.id},
             )
             db.add(message)
 
@@ -214,7 +223,7 @@ async def _save_diagnosis_message(state: dict, run) -> None:
         )
 
 
-async def _save_photo_to_neo4j_if_linked(session_id: str, image_path: str, state: dict, run) -> None:
+async def _save_photo_to_neo4j_if_linked(session_id: str, image_path: str, state: dict, run) -> bool:
     """Case 2 from skin_diagnostic/router.py's /start docstring: a patient
     was selected (`neo4j_patient_id`) AND symptoms were typed, so the run
     went through the interview pipeline above instead of the router's
@@ -223,12 +232,18 @@ async def _save_photo_to_neo4j_if_linked(session_id: str, image_path: str, state
     diagnosis finishes, so the photo + diagnosis conclusion still end up in
     the patient's Neo4j record instead of only in Postgres/the run store.
 
-    Runs after _save_diagnosis_message so a failure here (Neo4j down, CyFHIR
-    error, etc.) never hides the diagnosis result the user already sees in
-    the chat — same fire-and-log pattern as the other _save_* helpers.
+    Runs after the diagnostic reasoning step but BEFORE the run is marked
+    "completed" (see caller), so the returned bool lands in the same state
+    snapshot the frontend polls — same fire-and-log pattern as the other
+    _save_* helpers for the failure case, but the caller still needs to
+    know success/failure to decide whether to show a "đã lưu ảnh" notice.
+
+    Returns:
+        bool: True if the photo was linked to a patient and the Neo4j save
+        succeeded; False if no patient was linked, or the save failed.
     """
     if run is None or not run.neo4j_patient_id:
-        return
+        return False
 
     from app.skin_images.service import save_skin_photo_result
 
@@ -238,11 +253,13 @@ async def _save_photo_to_neo4j_if_linked(session_id: str, image_path: str, state
             image_path=image_path,
             conclusion_text=_build_diagnosis_summary(state),
         )
+        return True
     except Exception:
         logger.exception(
             "Failed to save skin photo + diagnosis to Neo4j for run %s (patient %s)",
             session_id, run.neo4j_patient_id,
         )
+        return False
 
 
 def _merge_new_differentials(state: dict, new_diffs: list, round_label: str) -> None:
@@ -516,11 +533,20 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
         else:
             state["reasoning"] = diag_output[:500]
 
+        # Lưu ảnh + kết luận vào hồ sơ Neo4j của bệnh nhân (nếu có chọn bệnh
+        # nhân) TRƯỚC khi đánh dấu run "completed" — để cờ kết quả nằm
+        # trong CÙNG state mà frontend nhận được lúc poll thấy "completed",
+        # thay vì cập nhật ngầm sau đó (frontend đã dừng poll ngay khi thấy
+        # "completed" nên sẽ không bao giờ thấy update muộn này).
+        run = await store.get(session_id)
+        state["photo_saved_to_patient"] = await _save_photo_to_neo4j_if_linked(
+            session_id, image_path, state, run
+        )
+
         await store.update(session_id, status="completed", current_step="diagnostic_reasoning", state=state)
         run = await store.get(session_id)
         await _save_diagnosis_to_memory(session_id, anamnesis, state, run)
         await _save_diagnosis_message(state, run)
-        await _save_photo_to_neo4j_if_linked(session_id, image_path, state, run)
 
     except Exception as e:
         await store.update(session_id, status="error", error=str(e))
