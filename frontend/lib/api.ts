@@ -73,12 +73,23 @@ export interface SkinPendingQuestion {
   total: number | null;
 }
 
+export interface SkinAnsweredQuestion {
+  question: string;
+  pqrst_category: string;
+  purpose: string;
+  discriminates: string[];
+  question_num: number;
+  answer: string;
+}
+
 export interface SkinDiagnosticResult {
   ranked_diagnoses: Record<string, unknown>[];
   reasoning: string;
   visual_observations: string;
   visual_differentials: string[];
   qa_history: string;
+  round1_qa_pairs: SkinAnsweredQuestion[];
+  round2_qa_pairs: SkinAnsweredQuestion[];
 }
 
 export interface SkinDiagnosticStatus {

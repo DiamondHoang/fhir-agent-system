@@ -227,7 +227,13 @@ async def get_skin_diagnostic_by_conversation(
     run = await store.get_by_conversation_id(conversation_id, user_id=str(current_user.id))
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No skin diagnostic run found for conversation")
-    result = build_result(run.state) if run.status == "completed" else {}
+    # Build from whatever state has been persisted so far — not just once
+    # status=="completed". pipeline_runner now saves state incrementally
+    # (after Round 1 and after Round 2), so a chat reopened mid-interview
+    # still gets qa_history with the already-answered questions instead of
+    # losing them until the whole run finishes. build_result() already
+    # returns {} safely when state is empty.
+    result = build_result(run.state)
     return SkinDiagnosticStatusResponse(
         run_id=run.id,
         status=run.status,
@@ -245,7 +251,9 @@ async def get_skin_diagnostic_status(
     current_user: User = Depends(get_current_user),
 ):
     run = await _get_run_or_404(run_id, str(current_user.id))
-    result = build_result(run.state) if run.status == "completed" else {}
+    # See comment in get_skin_diagnostic_by_conversation — build from
+    # whatever partial state exists so far, not only when fully completed.
+    result = build_result(run.state)
     return SkinDiagnosticStatusResponse(
         run_id=run.id,
         status=run.status,
@@ -263,7 +271,9 @@ async def get_skin_diagnostic_detail(
     current_user: User = Depends(get_current_user),
 ):
     run = await _get_run_or_404(run_id, str(current_user.id))
-    result = build_result(run.state) if run.status == "completed" else None
+    # See comment in get_skin_diagnostic_by_conversation — build from
+    # whatever partial state exists so far, not only when fully completed.
+    result = build_result(run.state) or None
     return SkinDiagnosticDetailResponse(
         run_id=run.id,
         status=run.status,

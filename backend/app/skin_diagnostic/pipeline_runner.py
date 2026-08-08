@@ -454,6 +454,11 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
         await store.update(session_id, status="running", current_step="user_interview_round1")
         state["round1_qa_pairs"] = await _run_interview_round(store, session_id, "user_interview_round1", state["round1_questions"], answered_so_far=0)
         state["qa_history"] = format_clinical_summary(state["round1_qa_pairs"]) if state["round1_qa_pairs"] else "(Không có câu hỏi)"
+        # Persist state right away (not just at the very end) so a page
+        # reload / re-opened old chat while Round 2 is still in progress
+        # (status="interrupt"/"running") can still show the 5 Round 1
+        # questions + answers instead of losing them until "completed".
+        await store.update(session_id, state=state)
         run = await store.get(session_id)
         await _save_interview_round_to_memory(session_id, run, state["round1_qa_pairs"], "Round 1")
 
@@ -471,6 +476,9 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
         await _save_interview_round_to_memory(session_id, run, state["round2_qa_pairs"], "Round 2")
         if state["round2_qa_pairs"]:
             state["qa_history"] = format_clinical_summary(state["round1_qa_pairs"] + state["round2_qa_pairs"])
+        # Persist again so all 10 Q&A are visible on reload even if the
+        # diagnostic_reasoning LLM call below fails/errors out.
+        await store.update(session_id, state=state)
 
         # Step 4: Diagnostic reasoning
         await store.update(session_id, status="running", current_step="diagnostic_reasoning")

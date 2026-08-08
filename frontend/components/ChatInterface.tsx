@@ -42,6 +42,7 @@ import type {
   UserProfile,
   SkinDiagnosticStatus,
   SkinPendingQuestion,
+  SkinAnsweredQuestion,
   SkinDiagnosticResult,
   SkinImageResult,
   PatientSearchResult,
@@ -102,8 +103,9 @@ interface Message extends ChatMessage {
   // trying (and failing) to link to them directly.
   skinImageResults?: SkinImageResult[];
   imagePreview?: string;
-  type?: "text" | "skin_questions" | "skin_result" | "skin_progress";
+  type?: "text" | "skin_questions" | "skin_result" | "skin_progress" | "skin_qa_progress";
   skinQuestions?: SkinPendingQuestion[];
+  skinAnsweredQuestions?: SkinAnsweredQuestion[];
   skinSubmitted?: boolean;
   skinResult?: SkinDiagnosticResult;
   skinStep?: string;
@@ -330,6 +332,72 @@ function appendMessageOnce(messages: Message[], message: Message): Message[] {
   return [...messages, message];
 }
 
+/** Rebuild the two "Đã hoàn thành trả lời (5/5 câu hỏi)" cards (Round 1,
+ * Round 2) from the backend's persisted answers, instead of the live
+ * pqrst_answers-based cards — those only exist in React state for the
+ * current tab and vanish on reload, which is exactly what made the 10
+ * questions disappear when reopening an old chat. Used both right after a
+ * live run finishes and when rehydrating a completed run from history, so
+ * the two code paths can never drift out of sync. */
+function buildAnsweredRoundCards(
+  runId: string,
+  conversationId: string,
+  result: SkinDiagnosticResult
+): Message[] {
+  const cards: Message[] = [];
+  const rounds: [SkinAnsweredQuestion[] | undefined, string][] = [
+    [result.round1_qa_pairs, "r1"],
+    [result.round2_qa_pairs, "r2"],
+  ];
+  rounds.forEach(([pairs, tag]) => {
+    if (!pairs || pairs.length === 0) return;
+    cards.push({
+      id: `skin-qa-${tag}-${runId}`,
+      conversation_id: conversationId,
+      role: "assistant",
+      content: `Đã hoàn thành trả lời (${pairs.length}/${pairs.length} câu hỏi)`,
+      created_at: new Date().toISOString(),
+      type: "skin_qa_progress",
+      skinAnsweredQuestions: pairs,
+      skinRunId: runId,
+    });
+  });
+  return cards;
+}
+
+/** Read-only version of the live "CÓ/KHÔNG" question card, used to re-show
+ * already-answered clinical questions — either inside the finished
+ * diagnosis result, or above a still-pending round when an old chat is
+ * reopened mid-interview. Same visual shape as the live card (see
+ * `msg.type === "skin_questions"` below) so it reads as "the same 10
+ * questions", just locked in on whichever answer was actually given. */
+function AnsweredQuestionsCard({ questions }: { questions: SkinAnsweredQuestion[] }) {
+  return (
+    <VStack align="stretch" gap={3}>
+      {questions.map((q) => {
+        const isYes = q.answer?.trim().toLowerCase() === "yes" || q.answer === "Có";
+        const isNo = q.answer?.trim().toLowerCase() === "no" || q.answer === "Không";
+        return (
+          <Box key={q.question_num} p={3} bg="white" borderRadius="md" borderWidth="1px" borderColor="gray.200">
+            <HStack gap={2} mb={1}>
+              <Text fontSize="xs" color="gray.500">Câu {q.question_num}</Text>
+            </HStack>
+            <Text fontSize="sm" fontWeight="medium" mb={2}>{q.question}</Text>
+            <HStack gap={2}>
+              <Button size="xs" flex={1} variant={isYes ? "solid" : "outline"} colorPalette="green" disabled>
+                CÓ
+              </Button>
+              <Button size="xs" flex={1} variant={isNo ? "solid" : "outline"} colorPalette="red" disabled>
+                KHÔNG
+              </Button>
+            </HStack>
+          </Box>
+        );
+      })}
+    </VStack>
+  );
+}
+
 export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputConsumed }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -503,14 +571,16 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           if (prev.some((m) => m.skinRunId === runId && m.type === "skin_result")) {
             return prev;
           }
-          // Only remove unsubmitted question cards. The last submitted card
-          // (skinSubmitted: true) stays on screen alongside the result so
-          // the round 2 questions don't vanish when the diagnosis appears.
+          // Drop the live pqrst_answers-based round cards for this run —
+          // they relied on client-side selection state, so from here on
+          // we always rebuild the two round cards from the backend's
+          // persisted answers (buildAnsweredRoundCards) instead.
           const filtered = prev.filter(
-            (m) => !(m.skinRunId === runId && m.type === "skin_questions" && !m.skinSubmitted)
+            (m) => !(m.skinRunId === runId && m.type === "skin_questions")
           );
           return [
             ...filtered,
+            ...buildAnsweredRoundCards(runId, activeConversationId || runId, resultObj),
             {
               id: `skin-res-${runId}`,
               conversation_id: activeConversationId || runId,
@@ -582,6 +652,36 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
         if (skinStatus && skinStatus.run_id) {
           setActiveSkinRunId(skinStatus.run_id);
           setSkinStatus(skinStatus);
+
+          // Câu hỏi/trả lời đã hoàn thành ở (các) round trước — backend giờ
+          // lưu state ngay sau mỗi round thay vì chỉ lúc "completed", nên
+          // round1_qa_pairs/round2_qa_pairs có thể đã có dữ liệu dù run vẫn
+          // đang "interrupt" hoặc "running". Không có block này thì 5 câu
+          // Round 1 sẽ biến mất khỏi UI khi user quay lại chat lúc đang chờ
+          // trả lời Round 2. Với case "completed", card kết quả đã được nạp
+          // sẵn từ listMessages() ở trên — chèn 2 card round vào NGAY TRƯỚC
+          // nó để khớp đúng thứ tự Round 1 -> Round 2 -> Kết quả như lúc
+          // chạy live, thay vì chỉ nối vào cuối danh sách.
+          const resultForRounds = skinStatus.result as SkinDiagnosticResult | undefined;
+          if (resultForRounds && (resultForRounds.round1_qa_pairs?.length || resultForRounds.round2_qa_pairs?.length)) {
+            setMessages((prev) => {
+              if (
+                prev.some(
+                  (m) => m.skinRunId === skinStatus.run_id && m.type === "skin_qa_progress"
+                )
+              ) {
+                return prev;
+              }
+              const roundCards = buildAnsweredRoundCards(skinStatus.run_id, conversationId, resultForRounds);
+              if (roundCards.length === 0) return prev;
+              const resultIdx = prev.findIndex(
+                (m) => m.skinRunId === skinStatus.run_id && m.type === "skin_result"
+              );
+              if (resultIdx === -1) return [...prev, ...roundCards];
+              return [...prev.slice(0, resultIdx), ...roundCards, ...prev.slice(resultIdx)];
+            });
+          }
+
           if (
             skinStatus.status === "interrupt" &&
             skinStatus.pending_questions &&
@@ -1697,6 +1797,17 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
                                 <SkinImageThumbnail key={img.binary_id || img.study_id} image={img} />
                               ))}
                             </HStack>
+                          </Box>
+                        )}
+
+                        {/* Câu hỏi lâm sàng đã trả lời ở round trước, hiện lại
+                            khi user quay lại chat đang dở dang (chưa completed) */}
+                        {msg.type === "skin_qa_progress" && msg.skinAnsweredQuestions && msg.skinAnsweredQuestions.length > 0 && (
+                          <Box mt={1}>
+                            <Text fontSize="xs" fontWeight="semibold" color="gray.600" mb={2}>
+                              {msg.content}
+                            </Text>
+                            <AnsweredQuestionsCard questions={msg.skinAnsweredQuestions} />
                           </Box>
                         )}
 

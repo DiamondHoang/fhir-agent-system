@@ -36,12 +36,23 @@ class PendingQuestion(BaseModel):
     total: int | None = None
 
 
+class AnsweredQuestion(BaseModel):
+    question: str = ""
+    pqrst_category: str = ""
+    purpose: str = ""
+    discriminates: list[str] = Field(default_factory=list)
+    question_num: int
+    answer: str = ""
+
+
 class SkinDiagnosticResult(BaseModel):
     ranked_diagnoses: list[dict] = Field(default_factory=list)
     reasoning: str = ""
     visual_observations: str = ""
     visual_differentials: list[str] = Field(default_factory=list)
     qa_history: str = ""
+    round1_qa_pairs: list[AnsweredQuestion] = Field(default_factory=list)
+    round2_qa_pairs: list[AnsweredQuestion] = Field(default_factory=list)
 
 
 class SkinDiagnosticStartResponse(BaseModel):
