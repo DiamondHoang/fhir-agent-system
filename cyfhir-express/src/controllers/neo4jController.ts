@@ -285,7 +285,10 @@ function sanitizeEntry(entry: any): any {
 }
 
 async function loadFromFhirServer(_params: any, res: Response) {
-  const fhirBaseUrl = _params.fhirBaseUrl || 'http://172.16.12.230:8084/fhir';
+  const fhirBaseUrl = _params.fhirBaseUrl || process.env.FHIR_SERVER_URL || '';
+  if (!fhirBaseUrl) {
+    return res.status(400).send({ error: 'fhirBaseUrl is required but was not provided and FHIR_SERVER_URL env is not set' });
+  }
   const resourceType = _params.resourceType;
   const searchParams = _params.searchParams || '';
 
@@ -389,7 +392,11 @@ export = {
 };
 
 async function runLoadAllResources(_params: any) {
-  const fhirBaseUrl = normalizeFhirBaseUrl(_params.fhirBaseUrl || 'http://172.16.12.230:8012/fhir');
+  const rawFhirUrl = _params.fhirBaseUrl || process.env.FHIR_SERVER_URL || '';
+  if (!rawFhirUrl) {
+    throw new Error('fhirBaseUrl is required but was not provided and FHIR_SERVER_URL env is not set');
+  }
+  const fhirBaseUrl = normalizeFhirBaseUrl(rawFhirUrl);
 
   // List of resource types from Neo4j
   const resourceTypes = [
@@ -546,7 +553,11 @@ async function runLoadAllResources(_params: any) {
 }
 
 function startLoadAllResources(params: any): { source: string; started: boolean } {
-  const source = normalizeFhirBaseUrl(params.fhirBaseUrl || 'http://172.16.12.230:8012/fhir');
+  const rawUrl = params.fhirBaseUrl || process.env.FHIR_SERVER_URL || '';
+  if (!rawUrl) {
+    throw new Error('fhirBaseUrl is required but was not provided and FHIR_SERVER_URL env is not set');
+  }
+  const source = normalizeFhirBaseUrl(rawUrl);
   if (activeImportJobs.has(source)) {
     return { source, started: false };
   }

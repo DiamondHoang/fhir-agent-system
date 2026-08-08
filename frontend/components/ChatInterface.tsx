@@ -31,6 +31,7 @@ import {
   startSkinDiagnostic,
   saveSkinPhotoOnly,
   getSkinDiagnosticStatus,
+  getSkinDiagnosticByConversation,
   submitSkinDiagnosticAnswers,
   searchExistingPatients,
 } from "@/lib/api";
@@ -467,9 +468,12 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
       if (status.status === "interrupt" && status.pending_questions) {
         stopSkinPolling();
         setLoading(false);
-        // Append or update questions card in messages
+        // Keep submitted question cards (previous rounds) and only remove
+        // the current unsubmitted pending card so all answered rounds stay visible.
         setMessages((prev) => {
-          const filtered = prev.filter((m) => m.skinRunId !== runId || m.type !== "skin_questions");
+          const filtered = prev.filter(
+            (m) => !(m.skinRunId === runId && m.type === "skin_questions" && !m.skinSubmitted)
+          );
           return [
             ...filtered,
             {
@@ -499,7 +503,12 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
           if (prev.some((m) => m.skinRunId === runId && m.type === "skin_result")) {
             return prev;
           }
-          const filtered = prev.filter((m) => m.skinRunId !== runId || m.type !== "skin_questions");
+          // Only remove unsubmitted question cards. The last submitted card
+          // (skinSubmitted: true) stays on screen alongside the result so
+          // the round 2 questions don't vanish when the diagnosis appears.
+          const filtered = prev.filter(
+            (m) => !(m.skinRunId === runId && m.type === "skin_questions" && !m.skinSubmitted)
+          );
           return [
             ...filtered,
             {
@@ -566,6 +575,48 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
             // message without a thumbnail rather than blocking the rest.
           });
       });
+
+      // Re-hydrate active/pending skin diagnostic run for this conversation
+      try {
+        const skinStatus = await getSkinDiagnosticByConversation(conversationId);
+        if (skinStatus && skinStatus.run_id) {
+          setActiveSkinRunId(skinStatus.run_id);
+          setSkinStatus(skinStatus);
+          if (
+            skinStatus.status === "interrupt" &&
+            skinStatus.pending_questions &&
+            skinStatus.pending_questions.length > 0
+          ) {
+            setMessages((prev) => {
+              if (
+                prev.some(
+                  (m) => m.skinRunId === skinStatus.run_id && m.type === "skin_questions"
+                )
+              ) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: `skin-q-${skinStatus.run_id}`,
+                  conversation_id: conversationId,
+                  role: "assistant",
+                  content: "Vui lòng trả lời các câu hỏi lâm sàng dưới đây để làm rõ chẩn đoán:",
+                  created_at: new Date().toISOString(),
+                  type: "skin_questions",
+                  skinQuestions: skinStatus.pending_questions || [],
+                  skinSubmitted: false,
+                  skinRunId: skinStatus.run_id,
+                },
+              ];
+            });
+          } else if (skinStatus.status === "running") {
+            startSkinPolling(skinStatus.run_id);
+          }
+        }
+      } catch {
+        // No active skin diagnostic run found for this conversation, ignore
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         handleAuthFailure();
@@ -782,8 +833,18 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
   async function handleAuthSubmit() {
     const trimmedUsername = username.trim();
     if (!trimmedUsername || !password || authLoading) return;
-    setAuthLoading(true);
     setError(null);
+    if (authMode === "register") {
+      if (trimmedUsername.length < 3) {
+        setError("Tên đăng nhập phải từ 3 ký tự trở lên.");
+        return;
+      }
+      if (password.length < 8) {
+        setError("Mật khẩu phải từ 8 ký tự trở lên.");
+        return;
+      }
+    }
+    setAuthLoading(true);
     try {
       if (authMode === "register") {
         await register(trimmedUsername, password);
@@ -1331,13 +1392,13 @@ export function ChatInterface({ onGraphUpdate, externalInput, onExternalInputCon
               <Input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Tên đăng nhập"
+                placeholder={authMode === "register" ? "Tên đăng nhập (tối thiểu 3 ký tự)" : "Tên đăng nhập"}
                 autoComplete="username"
               />
               <Input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mật khẩu"
+                placeholder={authMode === "register" ? "Mật khẩu (tối thiểu 8 ký tự)" : "Mật khẩu"}
                 type="password"
                 autoComplete={authMode === "login" ? "current-password" : "new-password"}
               />

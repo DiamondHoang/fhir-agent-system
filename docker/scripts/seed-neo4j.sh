@@ -5,7 +5,11 @@ echo "=== CyFHIR Neo4j Auto-Seeder Starting ==="
 
 EXPRESS_URL="${CYFHIR_EXPRESS_URL:-http://cyfhir-express:3001}"
 BUNDLES_DIR="${BUNDLES_DIR:-/data/synthea-bundles}"
-FHIR_SERVER_URL="${FHIR_SERVER_URL:-http://172.16.12.230:8012/fhir}"
+# FHIR_SERVER_URL is intentionally NOT given a default here.
+# Leave it empty (FHIR_SERVER_URL= in .env) when the real FHIR server is
+# unreachable (e.g. working from home) so the script falls through to
+# Mode 2 (local Synthea bundles) instead of trying 172.16.12.230.
+FHIR_SERVER_URL="${FHIR_SERVER_URL}"
 
 echo "Waiting for CyFHIR Express service at ${EXPRESS_URL} to become healthy..."
 until curl -s "${EXPRESS_URL}/docs" > /dev/null 2>&1 || curl -s "${EXPRESS_URL}/" > /dev/null 2>&1; do

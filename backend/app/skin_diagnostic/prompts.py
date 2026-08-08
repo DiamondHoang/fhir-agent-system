@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pipeline.prompts import (
+from app.pipeline.prompts import (
     _DIAGNOSE_INSTRUCTION,
     _DIAGNOSE_SYSTEM,
     _PLANNER_INSTRUCTION,
 )
-from utils.quality_gate import VISUAL_EXTRACT_PROMPT
+from app.utils.quality_gate import VISUAL_EXTRACT_PROMPT
 
 
-PROMPTS_DIR = Path(__file__).resolve().parents[2] / "skills"
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "skills"
 
 VISUAL_PROMPT = VISUAL_EXTRACT_PROMPT
 PLANNER_PROMPT = _PLANNER_INSTRUCTION

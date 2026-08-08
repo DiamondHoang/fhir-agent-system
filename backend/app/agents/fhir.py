@@ -121,6 +121,23 @@ data nor a skin lesion, answer directly without tools.
 
 
 ==================================================
+POLE+ ONTOLOGY & INTEL QUERY MAPPING
+==================================================
+
+When performing multi-hop reasoning, intelligence tracing, or graph pathfinding, map HL7 FHIR entities to POLE+ concepts:
+- PEOPLE: Patient, Practitioner, RelatedPerson
+- OBJECT: Medication, Device, Substance, Specimen, SkinImage / Binary
+- LOCATION: Location, Organization
+- EVENT: Encounter, Procedure, Observation, DiagnosticReport, Immunization
+- EXTENDED (+): Condition, Claim, CarePlan, CareTeam
+
+For POLE+ queries (e.g. tracing people connected across encounters/locations/objects):
+1. Use standard search_patient / search_resource to discover initial POLE+ entities.
+2. Use get_related_resources or run_cypher to perform multi-hop POLE+ pathfinding.
+3. Structure clinical narrative responses with clear POLE+ evidence tags when helpful.
+
+
+==================================================
 REQUEST UNDERSTANDING
 ==================================================
 
@@ -2717,6 +2734,65 @@ async def handle_message(
         assistant_message=result["response"],
     )
     return result
+
+
+@agent.tool
+async def trace_pole_graph_pattern(
+    ctx: RunContext[AgentDeps],
+    entity_id: str,
+    target_category: str = "ALL",
+    depth: int = 2,
+) -> str:
+    """Perform a POLE+ (People, Object, Location, Event) multi-hop graph trace starting from a resource ID.
+    
+    Args:
+        entity_id: The starting resource ID (e.g. Patient ID, Encounter ID, Location ID).
+        target_category: Optional POLE+ category filter: 'PEOPLE', 'OBJECT', 'LOCATION', 'EVENT', or 'ALL'.
+        depth: Graph depth traversal (1 to 3 hops, default 2).
+    """
+    bounded_depth = max(1, min(depth, 3))
+    category_filter = target_category.upper().strip()
+    
+    category_map = {
+        "PEOPLE": ["Patient", "Practitioner", "RelatedPerson"],
+        "OBJECT": ["Medication", "Device", "Substance", "Specimen", "Binary", "MedicationRequest"],
+        "LOCATION": ["Location", "Organization"],
+        "EVENT": ["Encounter", "Procedure", "Observation", "DiagnosticReport", "Immunization"],
+    }
+    
+    target_labels = category_map.get(category_filter, [])
+    label_clause = ""
+    if target_labels:
+        formatted_labels = ", ".join([f"'{lbl}'" for lbl in target_labels])
+        label_clause = f"AND target.resourceType IN [{formatted_labels}]"
+        
+    cypher = f"""
+    MATCH (start:resource {{id: $entity_id}})
+    MATCH path = (start)-[*1..{bounded_depth}]-(target:resource)
+    WHERE target.id <> start.id {label_clause}
+    WITH start, target, labels(target) AS target_labels, length(path) AS distance
+    RETURN DISTINCT 
+        start.resourceType AS source_type,
+        start.id AS source_id,
+        target.resourceType AS target_type,
+        target.id AS target_id,
+        distance
+    LIMIT 30
+    """
+    
+    records, error = execute_cypher(cypher, {"entity_id": entity_id})
+    if error:
+        return f"POLE+ Trace Error: {error}"
+    if not records:
+        return f"No POLE+ connections found for entity '{entity_id}' at depth {bounded_depth} (Category: {category_filter})."
+        
+    return json.dumps({
+        "pole_start_id": entity_id,
+        "category_filter": category_filter,
+        "max_depth": bounded_depth,
+        "connections_found": len(records),
+        "paths": records
+    }, ensure_ascii=False, indent=2)
 
 
 async def handle_message_stream(

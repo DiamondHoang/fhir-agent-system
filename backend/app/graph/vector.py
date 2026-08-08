@@ -1,4 +1,4 @@
-﻿"""Vector search client."""
+"""Vector search client."""
 
 from __future__ import annotations
 
@@ -15,22 +15,51 @@ async def create_vector_index(
     property_name: str = "embedding",
     dimensions: int = 1536,
 ) -> None:
-    """Create a vector index on a label/property."""
+    """Create a vector index on a label/property (Neo4j 5.x DDL with 4.x fallback)."""
+    # Neo4j 5.x standard Cypher DDL syntax
+    cypher_5x = f"""
+    CREATE VECTOR INDEX {index_name} IF NOT EXISTS
+    FOR (n:{label})
+    ON (n.{property_name})
+    OPTIONS {{
+      indexConfig: {{
+        `vector.dimensions`: {dimensions},
+        `vector.similarity_function`: 'cosine'
+      }}
+    }}
+    """
     try:
-        await execute_cypher(f"""
-            CREATE VECTOR INDEX {index_name} IF NOT EXISTS
-            FOR (n:{label})
-            ON (n.{property_name})
-            OPTIONS {{
-                indexConfig: {{
-                    `vector.dimensions`: {dimensions},
-                    `vector.similarity_function`: 'cosine'
-                }}
-            }}
-        """)
-        logger.info("Vector index '%s' created/verified", index_name)
+        await execute_cypher(cypher_5x)
+        logger.info("Vector index '%s' created/ensured via Neo4j 5.x DDL", index_name)
     except Exception as e:
-        logger.warning("Failed to create vector index '%s': %s", index_name, e)
+        err = str(e)
+        if "already exists" in err or "EquivalentSchemaRuleAlreadyExists" in err:
+            logger.info("Vector index '%s' already exists, skipping", index_name)
+        else:
+            # Fallback to procedure call for older Neo4j versions
+            try:
+                await execute_cypher(
+                    "CALL db.index.vector.createNodeIndex($name, $label, $prop, $dims, 'cosine')",
+                    {
+                        "name": index_name,
+                        "label": label,
+                        "prop": property_name,
+                        "dims": dimensions,
+                    },
+                )
+                logger.info("Vector index '%s' created via Neo4j 4.x procedure fallback", index_name)
+            except Exception as e2:
+                if "already exists" in str(e2) or "EquivalentSchemaRuleAlreadyExists" in str(e2):
+                    logger.info("Vector index '%s' already exists, skipping", index_name)
+                else:
+                    # Neo4j version does not support vector indexes (e.g. 4.2.x without GDS vector plugin).
+                    # This is non-fatal — log at DEBUG level so it does not pollute startup output.
+                    logger.debug(
+                        "Vector index '%s' not supported on this Neo4j instance (skipping): %s",
+                        index_name, e2,
+                    )
+
+
 
 
 async def vector_search(
@@ -39,16 +68,20 @@ async def vector_search(
     top_k: int = 10,
 ) -> list[dict]:
     """Search for similar entities using vector index."""
-    result = await execute_cypher(
-        f"""
-        CALL db.index.vector.queryNodes('{index_name}', $topK, $embedding)
-        YIELD node, score
-        RETURN node.name AS name, labels(node) AS labels, score
-        ORDER BY score DESC
-        """,
-        {"embedding": query_embedding, "topK": top_k},
-    )
-    return result
+    try:
+        result = await execute_cypher(
+            f"""
+            CALL db.index.vector.queryNodes('{index_name}', $topK, $embedding)
+            YIELD node, score
+            RETURN node.name AS name, labels(node) AS labels, score
+            ORDER BY score DESC
+            """,
+            {"embedding": query_embedding, "topK": top_k},
+        )
+        return result
+    except Exception as e:
+        logger.warning("Vector search query failed: %s", e)
+        return []
 
 
 async def hybrid_search(
@@ -59,33 +92,38 @@ async def hybrid_search(
 ) -> list[dict]:
     """Hybrid search combining text matching and vector similarity."""
     if query_embedding:
-        result = await execute_cypher(
-            """
-            CALL db.index.vector.queryNodes('entity_embeddings', $limit, $embedding)
-            YIELD node, score AS vector_score
-            WHERE ($label IS NULL OR $label IN labels(node))
-            WITH node, vector_score
-            OPTIONAL MATCH (node)-[r]-(related)
-            RETURN node.name AS name, labels(node) AS labels,
-                   vector_score, type(r) AS rel_type,
-                   related.name AS related_name
-            LIMIT $limit
-            """,
-            {"embedding": query_embedding, "label": label, "limit": limit},
-        )
-    else:
-        result = await execute_cypher(
-            """
-            MATCH (node)
-            WHERE ($label IS NULL OR $label IN labels(node))
-              AND (toLower(node.name) CONTAINS toLower($query)
-                   OR toLower(coalesce(node.description, '')) CONTAINS toLower($query))
-            OPTIONAL MATCH (node)-[r]-(related)
-            RETURN node.name AS name, labels(node) AS labels,
-                   1.0 AS vector_score, type(r) AS rel_type,
-                   related.name AS related_name
-            LIMIT $limit
-            """,
-            {"query": query, "label": label, "limit": limit},
-        )
+        try:
+            result = await execute_cypher(
+                """
+                CALL db.index.vector.queryNodes('entity_embeddings', $limit, $embedding)
+                YIELD node, score AS vector_score
+                WHERE ($label IS NULL OR $label IN labels(node))
+                WITH node, vector_score
+                OPTIONAL MATCH (node)-[r]-(related)
+                RETURN node.name AS name, labels(node) AS labels,
+                       vector_score, type(r) AS rel_type,
+                       related.name AS related_name
+                LIMIT $limit
+                """,
+                {"embedding": query_embedding, "label": label, "limit": limit},
+            )
+            return result
+        except Exception as e:
+            logger.warning("Vector hybrid search failed, falling back to text search: %s", e)
+
+    # Text search fallback
+    result = await execute_cypher(
+        """
+        MATCH (node)
+        WHERE ($label IS NULL OR $label IN labels(node))
+          AND (toLower(node.name) CONTAINS toLower($query)
+               OR toLower(coalesce(node.description, '')) CONTAINS toLower($query))
+        OPTIONAL MATCH (node)-[r]-(related)
+        RETURN node.name AS name, labels(node) AS labels,
+               1.0 AS vector_score, type(r) AS rel_type,
+               related.name AS related_name
+        LIMIT $limit
+        """,
+        {"query": query, "label": label, "limit": limit},
+    )
     return result

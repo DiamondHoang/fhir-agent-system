@@ -200,6 +200,22 @@ async function readError(response: Response): Promise<string> {
   if (!data || typeof data !== "object" || !("detail" in data)) return fallback;
   const detail = data.detail;
   if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((item: unknown) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          const loc = "loc" in item && Array.isArray((item as Record<string, unknown>).loc)
+            ? ((item as Record<string, unknown>).loc as unknown[]).filter((l) => l !== "body").join(".")
+            : "";
+          const msgStr = String((item as Record<string, unknown>).msg);
+          return loc ? `${loc}: ${msgStr}` : msgStr;
+        }
+        return null;
+      })
+      .filter((msg): msg is string => Boolean(msg));
+    if (msgs.length > 0) return msgs.join("; ");
+  }
   return fallback;
 }
 
@@ -457,6 +473,12 @@ export async function searchFhirSkinImages(params: {
 
 export async function getSkinDiagnosticStatus(runId: string): Promise<SkinDiagnosticStatus> {
   return jsonRequest<SkinDiagnosticStatus>(`/skin-diagnostics/${runId}/status`);
+}
+
+export async function getSkinDiagnosticByConversation(
+  conversationId: string,
+): Promise<SkinDiagnosticStatus> {
+  return jsonRequest<SkinDiagnosticStatus>(`/skin-diagnostics/by-conversation/${conversationId}`);
 }
 
 export async function submitSkinDiagnosticAnswers(

@@ -247,8 +247,8 @@ async def _save_photo_to_neo4j_if_linked(session_id: str, image_path: str, state
 
 def _merge_new_differentials(state: dict, new_diffs: list, round_label: str) -> None:
     """Fold planner-suggested `additional_differentials` into state, then re-dedup."""
-    from pipeline.nodes.planner import deduplicate_differentials_with_llm
-    from pipeline.utils import (
+    from app.pipeline.nodes.planner import deduplicate_differentials_with_llm
+    from app.pipeline.utils import (
         drop_generic_when_specific_present,
         merge_additional_differentials,
         normalize_disease_name,
@@ -270,8 +270,8 @@ def _merge_new_differentials(state: dict, new_diffs: list, round_label: str) -> 
 
 async def _run_vision_step(image_path: str) -> tuple[str, list[str]]:
     """Step 1: extract visual observations + candidate differentials from the image."""
-    from utils.json_parser import extract_json
-    from utils.quality_gate import run_visual_with_quality_gate
+    from app.utils.json_parser import extract_json
+    from app.utils.quality_gate import run_visual_with_quality_gate
 
     raw = run_visual_with_quality_gate(image_path)
     parsed = extract_json(raw)
@@ -297,9 +297,9 @@ async def _run_vision_step(image_path: str) -> tuple[str, list[str]]:
 def _augment_with_knowledge_base(state: dict, anamnesis: str) -> None:
     """Step 1b: supplement differentials with embedding/vector-search matches
     from knowledge_base/diseases/*.json, then dedup the combined list."""
-    from pipeline.nodes.planner import deduplicate_differentials_with_llm
-    from pipeline.utils import drop_generic_when_specific_present
-    from utils.knowledge_base import match_kb_candidates
+    from app.pipeline.nodes.planner import deduplicate_differentials_with_llm
+    from app.pipeline.utils import drop_generic_when_specific_present
+    from app.utils.knowledge_base import match_kb_candidates
 
     query_text = "\n".join(part for part in (anamnesis, state["visual_observations"]) if part)
     for match in match_kb_candidates(query_text=query_text):
@@ -318,14 +318,14 @@ def _ask_planner(
     Also verifies/normalizes questions and updates `state` in place with any
     new differentials or confirmed visual findings the planner surfaced.
     """
-    from config.settings import REASONING_MODEL_NAME, REASONING_MODEL_TIMEOUT, REASONING_MODEL_URL
-    from models.shared_client import call_llm
-    from pipeline.fallback_questions import _fill_to_5
-    from pipeline.prompts import _PLANNER_INSTRUCTION
-    from pipeline.utils import format_visual_for_planner
-    from utils.exam_only_signs import format_exam_only_hints
-    from utils.json_parser import extract_json
-    from utils.question_verifier import verify_questions_with_llm
+    from app.config.settings import REASONING_MODEL_NAME, REASONING_MODEL_TIMEOUT, REASONING_MODEL_URL
+    from app.models.shared_client import call_llm
+    from app.pipeline.fallback_questions import _fill_to_5
+    from app.pipeline.prompts import _PLANNER_INSTRUCTION
+    from app.pipeline.utils import format_visual_for_planner
+    from app.utils.exam_only_signs import format_exam_only_hints
+    from app.utils.json_parser import extract_json
+    from app.utils.question_verifier import verify_questions_with_llm
 
     visual = format_visual_for_planner(state["visual_observations"])
     diff_text = _format_diff_list(state["visual_differentials"])
@@ -418,13 +418,13 @@ async def run_pipeline_background(session_id: str, image_path: str, anamnesis: s
     store = await get_store()
 
     try:
-        from config.settings import REASONING_MODEL_NAME, REASONING_MODEL_TIMEOUT, REASONING_MODEL_URL
-        from models.shared_client import call_llm
-        from pipeline.prompts import _DIAGNOSE_INSTRUCTION, _DIAGNOSE_SYSTEM
-        from pipeline.utils import drop_generic_when_specific_present, format_visual_for_diagnose, normalize_disease_name
-        from tools.decision_tree_agent import format_clinical_summary
-        from utils.exam_only_signs import format_exam_only_hints
-        from utils.json_parser import extract_json
+        from app.config.settings import REASONING_MODEL_NAME, REASONING_MODEL_TIMEOUT, REASONING_MODEL_URL
+        from app.models.shared_client import call_llm
+        from app.pipeline.prompts import _DIAGNOSE_INSTRUCTION, _DIAGNOSE_SYSTEM
+        from app.pipeline.utils import drop_generic_when_specific_present, format_visual_for_diagnose, normalize_disease_name
+        from app.tools.decision_tree_agent import format_clinical_summary
+        from app.utils.exam_only_signs import format_exam_only_hints
+        from app.utils.json_parser import extract_json
 
         state: dict = {
             "image_path": image_path,

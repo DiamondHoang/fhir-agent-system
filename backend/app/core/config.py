@@ -136,7 +136,6 @@ class Settings(BaseSettings):
             "MEM0_VECTOR_STORE_PROVIDER": self.mem0_vector_store_provider,
             "MEM0_COLLECTION_NAME": self.mem0_collection_name,
             "MEM0_AGENT_ID": self.mem0_agent_id,
-            "FHIR_SERVER_URL": self.fhir_server_url,
         }
         missing = [name for name, value in required.items() if not str(value).strip()]
         if missing:

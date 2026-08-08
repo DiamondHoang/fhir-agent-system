@@ -1,4 +1,4 @@
-﻿"""Neo4j context graph client."""
+"""Neo4j context graph client."""
 
 from __future__ import annotations
 
@@ -205,6 +205,7 @@ async def connect_neo4j() -> None:
     _driver = AsyncGraphDatabase.driver(
         settings.neo4j_uri,
         auth=(settings.neo4j_username, settings.neo4j_password),
+        max_connection_pool_size=100,
     )
     await _driver.verify_connectivity()
     _connected = True

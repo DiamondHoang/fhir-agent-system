@@ -1,4 +1,4 @@
-﻿"""In-memory run store for the skin diagnostic workflow.
+"""In-memory run store for the skin diagnostic workflow.
 
 Runs are persisted as JSON snapshots so a browser refresh does not lose the
 diagnostic state. This is intentionally separate from the chat Conversation
@@ -133,6 +133,20 @@ class SkinDiagnosticStore:
             if user_id is not None and run.user_id != user_id:
                 return None
             return run
+
+    async def get_by_conversation_id(
+        self, conversation_id: str, *, user_id: str
+    ) -> SkinDiagnosticRun | None:
+        async with self._lock:
+            runs = [
+                run
+                for run in self._runs.values()
+                if run.user_id == user_id and run.conversation_id == conversation_id
+            ]
+            if not runs:
+                return None
+            runs.sort(key=lambda r: r.created_at, reverse=True)
+            return runs[0]
 
     async def update(self, run_id: str, **kwargs: Any) -> bool:
         async with self._lock:

@@ -6,7 +6,7 @@ up:
 	docker compose up --build -d
 
 down:
-	docker compose down
+	docker compose down --remove-orphans
 
 restart:
 	docker compose restart
@@ -18,7 +18,7 @@ ps:
 	docker compose ps
 
 seed:
-	docker compose run --rm cyfhir-seed
+	docker compose --profile seed run --rm cyfhir-seed
 
 clean:
 	docker compose down -v

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
         logger.info("Neo4j connected successfully")
     except Exception as e:
         _neo4j_available = False
-        logger.warning("Neo4j unavailable â€” starting in degraded mode: %s", e)
+        logger.warning("Neo4j unavailable — starting in degraded mode: %s", e)
 
     if _neo4j_available:
         try:
@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI):
         logger.warning("Skin diagnostic session restore failed: %s", e)
 
     try:
-        from utils.knowledge_base import warm_up_index
+        from app.utils.knowledge_base import warm_up_index
 
         await asyncio.sleep(2)
         await asyncio.to_thread(warm_up_index)

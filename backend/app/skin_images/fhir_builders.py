@@ -67,18 +67,34 @@ def build_diagnostic_report_resource(
     media_id: str,
     analysis_text: str,
     created_at: str,
+    conclusion_codes: list[dict] | None = None,
 ) -> dict:
-    return {
+    resource = {
         "resourceType": "DiagnosticReport",
         "id": report_id,
         "status": "final",
-        "code": {"text": "AI Skin Lesion Analysis"},
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/v2-0747",
+                        "code": "DERM",
+                        "display": "Dermatology",
+                    }
+                ],
+                "text": "Dermatology",
+            }
+        ],
+        "code": {"text": "AI Skin Lesion Diagnostic Report"},
         "subject": {"reference": f"Patient/{patient_id}"},
         "effectiveDateTime": created_at,
         "issued": created_at,
         "media": [{"link": {"reference": f"Media/{media_id}"}}],
         "conclusion": analysis_text,
     }
+    if conclusion_codes:
+        resource["conclusionCode"] = conclusion_codes
+    return resource
 
 
 def build_skin_analysis_bundle(resources: list[dict]) -> dict:

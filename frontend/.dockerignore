@@ -1,3 +1,11 @@
-node_modules
-.next
-.git
+# Frontend Docker build context — excludes dev/test artifacts
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+.npm
+.git/
+.env
+.env.local
+e2e/

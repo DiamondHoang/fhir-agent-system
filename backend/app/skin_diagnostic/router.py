@@ -218,6 +218,27 @@ async def start_skin_diagnostic(
     )
 
 
+@router.get("/by-conversation/{conversation_id}", response_model=SkinDiagnosticStatusResponse)
+async def get_skin_diagnostic_by_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    store = await get_store()
+    run = await store.get_by_conversation_id(conversation_id, user_id=str(current_user.id))
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No skin diagnostic run found for conversation")
+    result = build_result(run.state) if run.status == "completed" else {}
+    return SkinDiagnosticStatusResponse(
+        run_id=run.id,
+        status=run.status,
+        current_step=run.current_step,
+        progress=get_step_progress(run.current_step),
+        pending_questions=get_pending_questions(run),
+        result=result,
+        error=run.error,
+    )
+
+
 @router.get("/{run_id}/status", response_model=SkinDiagnosticStatusResponse)
 async def get_skin_diagnostic_status(
     run_id: str,

@@ -1,0 +1,33 @@
+# =============================================================================
+# Root .dockerignore — applied to the root Docker build context
+# =============================================================================
+
+# Git
+.git/
+.gitignore
+
+# CI / IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Java / Maven build output (50 MB+ compiled artifacts)
+cyfhir-plugin/cyfhir/target/
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/logs/
+*.log
+
+# Node / Next.js
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/*.tsbuildinfo
